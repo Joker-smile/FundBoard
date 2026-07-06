@@ -95,6 +95,30 @@ class StatusBar(ttk.Frame):
         )
         self.avg_change_label.pack(side=tk.LEFT, padx=6)
 
+        # --- A股指数 ---
+        self._add_separator()
+        self.indices_frame = ttk.Frame(self)
+        self.indices_frame.pack(side=tk.LEFT, padx=6)
+
+        self.index_names = {
+            "sh000001": "沪指",
+            "sz399001": "深指",
+            "sz399006": "创业",
+            "sh000688": "科创50",
+        }
+        self.index_labels = {}
+        for symbol, name in self.index_names.items():
+            label = ttk.Label(
+                self.indices_frame,
+                text=f"{name}: -- (--%)",
+                font=("Microsoft YaHei", 9),
+            )
+            label.pack(side=tk.LEFT, padx=8)
+            self.index_labels[symbol] = label
+
+        # 启动后台更新指数
+        self.update_indices()
+
         # --- 版本号（右侧） ---
         version = APP_SETTINGS.get("version", "1.0.0")
         ttk.Label(
@@ -186,3 +210,72 @@ class StatusBar(ttk.Frame):
             self.status_label.configure(foreground="#3498db")
         except tk.TclError:
             pass
+
+    def update_indices(self):
+        """发起后台请求更新指数"""
+        if not self.winfo_exists():
+            return
+            
+        import threading
+        
+        def fetch_task():
+            import urllib.request
+            import re
+            
+            # 使用新浪的指数接口
+            req = urllib.request.Request(
+                'http://hq.sinajs.cn/list=sh000001,sz399001,sz399006,sh000688',
+                headers={'Referer': 'https://finance.sina.com.cn'}
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    content = response.read().decode('gb18030', errors='ignore')
+                
+                parsed_data = {}
+                for line in content.splitlines():
+                    m = re.match(r'var hq_str_(s[hz]\d+)="([^"]+)"', line)
+                    if m:
+                        symbol = m.group(1)
+                        fields = m.group(2).split(',')
+                        if len(fields) >= 4:
+                            yesterday_close = float(fields[2])
+                            current = float(fields[3])
+                            parsed_data[symbol] = (current, yesterday_close)
+                
+                # 回到主线程更新UI
+                if self.winfo_exists():
+                    self.after(0, self._on_indices_fetched, parsed_data)
+            except Exception as e:
+                print("Fetch indices error:", e)
+                # 失败时也调度下一次更新，确保不中断
+                if self.winfo_exists():
+                    self.after(3000, self.update_indices)
+                
+        thread = threading.Thread(target=fetch_task, daemon=True)
+        thread.start()
+
+    def _on_indices_fetched(self, data):
+        """在主线程更新指数显示，并安排下一次更新"""
+        if not self.winfo_exists():
+            return
+            
+        for symbol, label in self.index_labels.items():
+            if symbol in data:
+                current, yesterday_close = data[symbol]
+                change = current - yesterday_close
+                pct = (change / yesterday_close) * 100 if yesterday_close else 0.0
+                
+                sign = "+" if change >= 0 else ""
+                name = self.index_names.get(symbol, symbol)
+                label.configure(text=f"{name}: {current:.1f} ({sign}{pct:.2f}%)")
+                
+                if change > 0:
+                    label.configure(foreground="#e74c3c")  # 红
+                elif change < 0:
+                    label.configure(foreground="#27ae60")  # 绿
+                else:
+                    label.configure(foreground="")
+                    
+        # 安排下一次更新 (3秒)
+        if self.winfo_exists():
+            self.after(3000, self.update_indices)
