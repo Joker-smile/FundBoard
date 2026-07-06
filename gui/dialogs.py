@@ -419,3 +419,133 @@ class SettingsDialog(tk.Toplevel):
     def get_result(self) -> Dict:
         """获取保存的设置结果（窗口关闭后调用）"""
         return self._result
+
+class AddFundDialog(tk.Toplevel):
+    def __init__(self, parent, data_source):
+        super().__init__(parent)
+        self.title("添加自选基金")
+        self.geometry("600x500")
+        self._center_window(600, 500)
+        self.resizable(False, False)
+        # Make modal
+        self.transient(parent)
+        self.grab_set()
+
+        self.data_source = data_source
+        self.selected_funds = []
+        
+        self._setup_ui()
+        
+    def _center_window(self, width: int, height: int):
+        """将窗口居中显示"""
+        self.update_idletasks()
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        x = (screen_w - width) // 2
+        y = (screen_h - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        
+    def _setup_ui(self):
+        # 搜索区域
+        search_frame = ttk.Frame(self, padding=10)
+        search_frame.pack(fill=tk.X)
+        
+        ttk.Label(search_frame, text="搜索名称或代码:").pack(side=tk.LEFT, padx=5)
+        self.keyword_entry = ttk.Entry(search_frame, width=30)
+        self.keyword_entry.pack(side=tk.LEFT, padx=5)
+        self.keyword_entry.bind("<Return>", lambda e: self._on_search())
+        
+        self.search_btn = ttk.Button(search_frame, text="搜索", command=self._on_search, bootstyle="primary")
+        self.search_btn.pack(side=tk.LEFT, padx=5)
+        
+        # 结果区域
+        result_frame = ttk.Frame(self, padding=10)
+        result_frame.pack(fill=tk.BOTH, expand=True)
+        
+        columns = ("code", "name")
+        self.tree = ttk.Treeview(result_frame, columns=columns, show="headings", selectmode="extended")
+        self.tree.heading("code", text="基金代码")
+        self.tree.heading("name", text="基金名称")
+        self.tree.column("code", width=100, anchor=tk.CENTER)
+        self.tree.column("name", width=400, anchor=tk.W)
+        
+        scroll = ttk.Scrollbar(result_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scroll.set)
+        
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.tree.bind("<Double-1>", lambda e: self._on_add())
+        
+        # 底部按钮
+        btn_frame = ttk.Frame(self, padding=10)
+        btn_frame.pack(fill=tk.X)
+        
+        ttk.Button(btn_frame, text="关闭", command=self.destroy, bootstyle="secondary").pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btn_frame, text="添加选中", command=self._on_add, bootstyle="success").pack(side=tk.RIGHT, padx=5)
+        
+        self.status_var = tk.StringVar()
+        ttk.Label(btn_frame, textvariable=self.status_var, foreground="gray").pack(side=tk.LEFT, padx=5)
+
+    def _on_search(self):
+        kw = self.keyword_entry.get().strip()
+        if not kw:
+            return
+            
+        self.status_var.set("搜索中...")
+        self.update_idletasks()
+        
+        # 清空
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+            
+        import threading
+        
+        def worker():
+            try:
+                from data_sources.eastmoney import EastMoneyDataSource
+                if isinstance(self.data_source, EastMoneyDataSource):
+                    ds = self.data_source
+                else:
+                    ds = EastMoneyDataSource()
+                    
+                results = ds.search_fund(kw)
+                self.after(0, self._on_search_result, results)
+            except Exception as e:
+                self.after(0, self._on_search_error, str(e))
+                
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_search_result(self, results):
+        if not results:
+            self.status_var.set("未找到相关基金")
+            from tkinter import messagebox
+            messagebox.showinfo("提示", "未找到相关基金，请更换关键词重试。", parent=self)
+            return
+            
+        self.status_var.set(f"共找到 {len(results)} 只基金，可多选或双击添加")
+        for fund in results:
+            self.tree.insert("", tk.END, values=(fund["code"], fund["name"]))
+            
+    def _on_search_error(self, error):
+        self.status_var.set("搜索失败")
+        from tkinter import messagebox
+        messagebox.showerror("错误", f"搜索失败: {error}", parent=self)
+
+    def _on_add(self):
+        selection = self.tree.selection()
+        if not selection:
+            from tkinter import messagebox
+            messagebox.showwarning("提示", "请先在列表中选中要添加的基金！", parent=self)
+            return
+            
+        for item in selection:
+            values = self.tree.item(item, "values")
+            if values:
+                self.selected_funds.append({"code": values[0], "name": values[1], "index_type": "自选"})
+                
+        self.destroy()
+        
+    def get_result(self) -> List[Dict]:
+        return self.selected_funds
+

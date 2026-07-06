@@ -392,6 +392,26 @@ class EastMoneyDataSource(BaseDataSource):
             logger.debug("获取交易状态失败 [%s]: %s", code, exc)
             return ""
 
+    def search_fund(self, keyword: str) -> List[Dict]:
+        """通过天天基金的搜索接口搜索基金"""
+        results = []
+        if not keyword:
+            return results
+        try:
+            url = f"http://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key={keyword}"
+            resp = requester.get(url, referer=EASTMONEY_CONFIG["referer"])
+            data = resp.json()
+            if data.get("ErrCode") == 0:
+                for item in data.get("Datas", []):
+                    code = item.get("CODE")
+                    name = item.get("NAME")
+                    if code and name:
+                        results.append({"code": code, "name": name, "index_type": "自选"})
+            return results
+        except Exception as exc:
+            logger.error("搜索基金失败 [%s]: %s", keyword, exc)
+            return []
+
     # ===========================================================
     # 工具方法
     # ===========================================================

@@ -50,6 +50,7 @@ class ToolBar(ttk.Frame):
         self.on_search = None
         self.on_fetch_click = None
         self.on_update_selected_click = None
+        self.on_add_custom_fund_click = None
         self.on_auto_refresh_change = None
         self.on_export_excel: Optional[Callable] = None
         self.on_export_csv: Optional[Callable] = None
@@ -113,7 +114,17 @@ class ToolBar(ttk.Frame):
             style="info.TButton",
             width=12,
         )
-        self.update_selected_btn.pack(side=tk.LEFT, padx=(0, 8))
+        self.update_selected_btn.pack(side=tk.LEFT, padx=(0, 4))
+        
+        # 添加自选按钮
+        self.add_custom_btn = ttk.Button(
+            left_frame,
+            text="➕ 添加自选",
+            command=self._on_add_custom_fund_click,
+            style="success.TButton",
+            width=12,
+        )
+        self.add_custom_btn.pack(side=tk.LEFT, padx=(0, 8))
 
         # 自动刷新
         ttk.Label(
@@ -272,9 +283,14 @@ class ToolBar(ttk.Frame):
             self.on_fetch()
             
     def _on_update_selected_click(self):
-        """更新选中按钮点击"""
+        """点击更新选中按钮"""
         if self.on_update_selected_click:
             self.on_update_selected_click()
+            
+    def _on_add_custom_fund_click(self):
+        """点击添加自选按钮"""
+        if self.on_add_custom_fund_click:
+            self.on_add_custom_fund_click()
 
     def _on_filter_click(self):
         """筛选按钮点击"""
@@ -332,7 +348,7 @@ class ToolBar(ttk.Frame):
         self._filter_buttons = {}
         
         # 重新生成选项
-        options = [("all", "全部")]
+        options = [("all", "全部"), ("自选", "自选")]
         for name in INDEX_KEYWORDS.keys():
             options.append((name, name))
             

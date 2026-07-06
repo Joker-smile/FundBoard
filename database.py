@@ -69,9 +69,17 @@ class FundDatabase:
                     purchase_limit  TEXT DEFAULT '',
                     purchase_status TEXT DEFAULT '',
                     data_source     TEXT DEFAULT '',
-                    updated_at      TEXT
+                    updated_at      TEXT,
+                    is_custom       INTEGER DEFAULT 0
                 );
             """)
+
+            # 尝试添加 is_custom 字段，防止已有表结构冲突
+            try:
+                cursor.execute("ALTER TABLE funds ADD COLUMN is_custom INTEGER DEFAULT 0;")
+            except sqlite3.OperationalError:
+                # 字段可能已经存在，忽略错误
+                pass
 
             # ---------- nav_history 表 ----------
             cursor.execute("""
@@ -111,7 +119,7 @@ class FundDatabase:
     # ----------------------------------------------------------
 
     def save_funds(self, funds: List[Dict]):
-        """批量保存基金数据（INSERT OR REPLACE）。
+        """批量保存基金数据（INSERT INTO ... ON CONFLICT DO UPDATE）。
 
         同时向 nav_history 插入一条历史净值记录。
 
@@ -127,13 +135,27 @@ class FundDatabase:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             for fund in funds:
-                # 写入 / 更新 funds 表
+                # 写入 / 更新 funds 表，防止覆盖已有的 is_custom 标记
                 cursor.execute("""
-                    INSERT OR REPLACE INTO funds
+                    INSERT INTO funds
                         (code, name, index_type, nav, nav_date, acc_nav,
                          daily_change, daily_change_pct, since_inception,
-                         purchase_limit, purchase_status, data_source, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         purchase_limit, purchase_status, data_source, updated_at, is_custom)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(code) DO UPDATE SET
+                        name=excluded.name,
+                        index_type=excluded.index_type,
+                        nav=excluded.nav,
+                        nav_date=excluded.nav_date,
+                        acc_nav=excluded.acc_nav,
+                        daily_change=excluded.daily_change,
+                        daily_change_pct=excluded.daily_change_pct,
+                        since_inception=excluded.since_inception,
+                        purchase_limit=excluded.purchase_limit,
+                        purchase_status=excluded.purchase_status,
+                        data_source=excluded.data_source,
+                        updated_at=excluded.updated_at,
+                        is_custom=CASE WHEN excluded.is_custom = 1 THEN 1 ELSE funds.is_custom END
                 """, (
                     fund.get("code", ""),
                     fund.get("name", ""),
@@ -148,6 +170,7 @@ class FundDatabase:
                     fund.get("purchase_status", ""),
                     fund.get("data_source", ""),
                     now,
+                    fund.get("is_custom", 0),
                 ))
 
                 # 同时插入 nav_history（忽略重复）
@@ -177,7 +200,7 @@ class FundDatabase:
         """查询基金数据。
 
         Args:
-            index_type: 指数类型过滤，'all' 表示不过滤。
+            index_type: 指数类型过滤，'all' 表示不过滤，'自选' 表示仅获取自选基金。
 
         Returns:
             基金字典列表。
@@ -187,6 +210,8 @@ class FundDatabase:
             cursor = conn.cursor()
             if index_type == "all":
                 cursor.execute("SELECT * FROM funds ORDER BY index_type, code")
+            elif index_type == "自选":
+                cursor.execute("SELECT * FROM funds WHERE is_custom = 1 ORDER BY code")
             else:
                 cursor.execute(
                     "SELECT * FROM funds WHERE index_type = ? ORDER BY code",
@@ -291,11 +316,14 @@ class FundDatabase:
     # 维护操作
     # ----------------------------------------------------------
 
-    def clear_funds(self):
+    def clear_funds(self, keep_custom=True):
         """清空 funds 表（不影响 nav_history）。"""
         conn = self._get_conn()
         try:
-            conn.execute("DELETE FROM funds")
+            if keep_custom:
+                conn.execute("DELETE FROM funds WHERE is_custom = 0")
+            else:
+                conn.execute("DELETE FROM funds")
             conn.commit()
             logger.info("funds 表已清空")
         except sqlite3.Error as exc:

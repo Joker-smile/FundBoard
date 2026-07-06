@@ -20,13 +20,13 @@ class FundTableView(ttk.Frame):
     # 列定义: (列ID, 列标题, 宽度, 对齐方式)
     COLUMNS = [
         ("code", "基金代码", 80, "center"),
-        ("name", "基金名称", 250, "w"),
-        ("purchase_limit", "交易状态", 280, "center"),
+        ("name", "基金名称", 180, "center"),
+        ("purchase_limit", "交易状态", 220, "center"),
         ("index_type", "跟踪指数", 80, "center"),
-        ("nav", "单位净值", 100, "center"),
-        ("nav_date", "净值日期", 100, "center"),
-        ("acc_nav", "累计净值", 100, "center"),
-        ("daily_change", "日增长值", 100, "center"),
+        ("nav", "单位净值", 90, "center"),
+        ("nav_date", "净值日期", 90, "center"),
+        ("acc_nav", "累计净值", 90, "center"),
+        ("daily_change", "日增长值", 90, "center"),
         ("daily_change_pct", "日增长率(%)", 100, "center"),
     ]
 
@@ -46,6 +46,7 @@ class FundTableView(ttk.Frame):
         self._double_click_callback: Optional[Callable] = None
         self._history_callback: Optional[Callable] = None
         self._right_click_callback: Optional[Callable] = None
+        self._delete_custom_callback: Optional[Callable] = None
         self._is_dark_theme = True
 
         self._setup_ui()
@@ -79,7 +80,7 @@ class FundTableView(ttk.Frame):
             self.tree.heading(
                 col_id,
                 text=col_title,
-                anchor="center",
+                anchor=col_anchor,
                 command=lambda c=col_id: self._on_heading_click(c),
             )
             self.tree.column(
@@ -87,7 +88,7 @@ class FundTableView(ttk.Frame):
                 width=col_width,
                 minwidth=60,
                 anchor=col_anchor,
-                stretch=(col_id == "name"),  # 只有名称列自动拉伸
+                stretch=(col_id in ("name", "purchase_limit")),  # 名称和交易状态自动拉伸
             )
 
         # 垂直滚动条
@@ -145,6 +146,11 @@ class FundTableView(ttk.Frame):
                 fund = self.get_selected_fund()
                 if fund:
                     menu.add_command(label="📈 查看历史净值图表", command=lambda f=fund: self._history_callback(f))
+                    
+                    # 只有自选基金才能删除
+                    if (fund.get("is_custom") == 1 or fund.get("index_type") == "自选") and self._delete_custom_callback:
+                        menu.add_separator()
+                        menu.add_command(label="🗑️ 删除自选", command=lambda f=fund: self._delete_custom_callback(f))
                     
             if menu.index("end") is not None:
                 menu.post(event.x_root, event.y_root)
@@ -311,6 +317,10 @@ class FundTableView(ttk.Frame):
     def set_history_callback(self, callback: Callable):
         """设置查看历史净值的回调函数"""
         self._history_callback = callback
+        
+    def set_delete_custom_callback(self, callback: Callable):
+        """设置删除自选的回调函数"""
+        self._delete_custom_callback = callback
 
     def get_all_data(self) -> List[Dict]:
         """返回当前显示的所有数据"""

@@ -1,5 +1,10 @@
 {
     "INDEX_KEYWORDS": {
+        "印度": [
+            "宏利印度",
+            "工银印度",
+            "泰达宏利印度"
+        ],
         "纳指": [
             "纳斯达克",
             "纳指100",
@@ -16,9 +21,28 @@
         ]
     },
     "APP_SETTINGS": {
+        "title": "场外指数基金数据获取工具",
+        "version": "1.0.0",
+        "window_size": "1400x800",
+        "min_size": [
+            1200,
+            600
+        ],
+        "request_delay_min": 0.3,
+        "request_delay_max": 1.5,
+        "max_retries": 3,
+        "retry_backoff": 2,
+        "request_timeout": 15,
+        "auto_refresh_intervals": [
+            5,
+            10,
+            30,
+            60
+        ],
+        "db_file": "fund_data.db",
+        "history_limit": 30,
         "request_delay": 1.0,
         "retry_count": 3,
-        "timeout": 30,
-        "history_limit": 30
+        "timeout": 30
     }
 }

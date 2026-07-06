@@ -153,7 +153,11 @@ class FundApp:
         # 表格双击和右键回调
         self.table_view.set_double_click_callback(self._show_fund_webview)
         self.table_view.set_history_callback(self._show_fund_history)
+        self.table_view.set_delete_custom_callback(self._delete_custom_fund)
         self.table_view.on_right_click = self._update_selected_funds
+        
+        # 添加自选回调
+        self.toolbar.on_add_custom_fund_click = self._show_add_fund_dialog
 
         # 窗口关闭事件
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -208,6 +212,25 @@ class FundApp:
                     index_type="all",
                     progress_callback=progress_callback,
                 )
+
+                # 从数据库中读取所有自选基金
+                custom_funds = self.db.get_funds(index_type="自选")
+                if custom_funds:
+                    # 找出不在主列表中的自选基金进行额外拉取
+                    main_codes = {f["code"] for f in funds}
+                    needed_custom_funds = [cf for cf in custom_funds if cf["code"] not in main_codes]
+                    
+                    # 标记主列表中已经属于自选的基金
+                    for f in funds:
+                        if f["code"] in {cf["code"] for cf in custom_funds}:
+                            f["is_custom"] = 1
+
+                    if needed_custom_funds:
+                        custom_funds_data = source.fetch_specific_funds(needed_custom_funds, progress_callback=progress_callback)
+                        if custom_funds_data:
+                            for cf in custom_funds_data:
+                                cf["is_custom"] = 1
+                                funds.append(cf)
 
                 # 回到主线程处理结果
                 self.root.after(0, self._on_fetch_success, funds, source_name, is_auto)
@@ -295,8 +318,8 @@ class FundApp:
 
         # 保存到数据库
         try:
-            # 每次获取全量新数据后，清空旧的快照以移除不再跟踪的废弃基金
-            self.db.clear_funds()
+            # 每次获取全量新数据后，清空非自选的旧的快照以移除不再跟踪的废弃基金
+            self.db.clear_funds(keep_custom=True)
             self.db.save_funds(funds)
         except Exception as e:
             print(f"保存数据库失败: {e}")
@@ -355,7 +378,10 @@ class FundApp:
         # 应用指数类型筛选
         filter_type = self.toolbar.get_filter_type()
         if filter_type != "all":
-            filtered = [f for f in filtered if f.get("index_type") == filter_type]
+            if filter_type == "自选":
+                filtered = [f for f in filtered if f.get("is_custom") == 1]
+            else:
+                filtered = [f for f in filtered if f.get("index_type") == filter_type]
             
         # 应用交易状态筛选
         status_filter = self.toolbar.get_status_filter()
@@ -524,6 +550,127 @@ class FundApp:
     # 历史净值查询
     # ============================
 
+    def _show_add_fund_dialog(self):
+        """显示添加自选基金弹窗"""
+        from gui.dialogs import AddFundDialog
+        
+        source_name = self.toolbar.get_selected_source()
+        source = self.data_sources.get(source_name)
+        
+        dialog = AddFundDialog(self.root, source)
+        self.root.wait_window(dialog)
+        
+        result = dialog.get_result()
+        if result:
+            added_funds = []
+            # 从数据库获取现有的自选基金代码
+            existing_custom = self.db.get_funds(index_type="自选")
+            existing_codes = {f["code"] for f in existing_custom}
+            
+            for fund in result:
+                if fund["code"] not in existing_codes:
+                    fund["is_custom"] = 1
+                    added_funds.append(fund)
+                    
+            if added_funds:
+                messagebox.showinfo("成功", f"成功添加 {len(added_funds)} 只自选基金，正在获取数据...", parent=self.root)
+                self._fetch_custom_funds(added_funds, source)
+            else:
+                messagebox.showinfo("提示", "所选基金已在自选列表中，未重复添加。", parent=self.root)
+
+    def _fetch_custom_funds(self, new_funds, source):
+        """后台获取新添加的自选基金数据，并合并到现有列表"""
+        self.status_bar.set_status("正在获取自选基金数据...", "info")
+
+        def progress_callback(current, total, message):
+            self.root.after(0, self.status_bar.show_progress, current, total, message)
+
+        def fetch_task():
+            try:
+                custom_funds_data = source.fetch_specific_funds(new_funds, progress_callback=progress_callback)
+                if custom_funds_data:
+                    for cf in custom_funds_data:
+                        cf["is_custom"] = 1
+                self.root.after(0, self._on_custom_funds_fetched, custom_funds_data, new_funds)
+            except Exception as e:
+                self.root.after(0, self.status_bar.set_status, f"获取自选基金失败: {e}", "error")
+
+        thread = threading.Thread(target=fetch_task, daemon=True)
+        thread.start()
+
+    def _on_custom_funds_fetched(self, fetched_data, original_funds):
+        """自选基金数据获取完成回调（主线程）"""
+        existing_codes = {f["code"]: i for i, f in enumerate(self.all_funds)}
+
+        if fetched_data:
+            for cf in fetched_data:
+                cf["is_custom"] = 1
+                if cf["code"] in existing_codes:
+                    # 替换已存在的占位记录
+                    self.all_funds[existing_codes[cf["code"]]] = cf
+                else:
+                    self.all_funds.append(cf)
+        else:
+            # API获取失败，用占位记录填充
+            for fund in original_funds:
+                if fund["code"] not in existing_codes:
+                    self.all_funds.append({
+                        "code": fund["code"],
+                        "name": fund.get("name", ""),
+                        "index_type": fund.get("index_type", ""),
+                        "nav": None, "nav_date": "", "acc_nav": None,
+                        "daily_change": None, "daily_change_pct": None,
+                        "since_inception": None, "purchase_limit": "",
+                        "purchase_status": "", "data_source": "",
+                        "is_custom": 1,
+                    })
+
+        # 保存到数据库
+        try:
+            self.db.save_funds(self.all_funds)
+        except Exception as e:
+            print(f"保存数据库失败: {e}")
+
+        # 刷新显示
+        self._apply_filter_and_search()
+        count = len(fetched_data) if fetched_data else 0
+        self.status_bar.set_status(f"已获取 {count} 只自选基金数据", "success")
+                
+    def _delete_custom_fund(self, fund):
+        """删除自选基金"""
+        if not fund:
+            return
+            
+        code = fund.get("code")
+        name = fund.get("name")
+        
+        if messagebox.askyesno("删除自选", f"确定要从自选列表中删除 {name} ({code}) 吗？", parent=self.root):
+            has_index = False
+            for f in self.all_funds:
+                if f.get("code") == code:
+                    f["is_custom"] = 0
+                    if f.get("index_type") and f.get("index_type") != "自选":
+                        has_index = True
+                    break
+            
+            # 从数据库中删除或取消自选标记
+            try:
+                conn = self.db._get_conn()
+                cursor = conn.cursor()
+                if has_index:
+                    cursor.execute("UPDATE funds SET is_custom = 0 WHERE code = ?", (code,))
+                else:
+                    cursor.execute("DELETE FROM funds WHERE code = ?", (code,))
+                    self.all_funds = [f for f in self.all_funds if f.get("code") != code]
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"从数据库删除失败: {e}")
+            
+            # 刷新显示
+            self._apply_filter_and_search()
+            messagebox.showinfo("成功", f"已删除自选基金 {name}", parent=self.root)
+                    
     def _show_fund_history(self, fund):
         """显示基金历史净值"""
         if not fund:
