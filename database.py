@@ -16,7 +16,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from config import APP_SETTINGS
+from config import APP_SETTINGS, BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +25,9 @@ class FundDatabase:
     """基金数据 SQLite 持久化层。"""
 
     def __init__(self, db_path: Optional[str] = None):
-        """初始化数据库。
-
-        Args:
-            db_path: 数据库文件路径。默认使用 APP_SETTINGS['db_file']，
-                     放在脚本同目录下。
-        """
+        """逻辑。"""
         if db_path is None:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            db_path = os.path.join(script_dir, APP_SETTINGS["db_file"])
+            db_path = os.path.join(BASE_DIR, APP_SETTINGS["db_file"])
         self.db_path = db_path
         self._init_db()
 

@@ -111,7 +111,15 @@ APP_SETTINGS = {
     "history_limit": 30,
 }
 
-USER_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_config.json")
+import sys
+
+# 获取运行根目录（兼容打包后的 exe 和直接运行的 py 脚本）
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+USER_CONFIG_FILE = os.path.join(BASE_DIR, "user_config.json")
 
 def load_user_config():
     if os.path.exists(USER_CONFIG_FILE):
