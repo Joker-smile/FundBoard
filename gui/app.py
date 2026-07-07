@@ -324,6 +324,17 @@ class FundApp:
             self.status_bar.set_status("未获取到数据", "warning")
             return
 
+        # 合并数据库中现有的自选基金，以防因获取失败而在内存中丢失
+        try:
+            db_custom = self.db.get_funds(index_type="自选")
+            existing_codes = {f["code"] for f in funds}
+            for cf in db_custom:
+                if cf["code"] not in existing_codes:
+                    cf["is_custom"] = 1
+                    funds.append(cf)
+        except Exception as e:
+            print(f"合并自选数据失败: {e}")
+
         # 保存到数据库
         try:
             # 每次获取全量新数据后，清空非自选的旧的快照以移除不再跟踪的废弃基金
@@ -706,11 +717,13 @@ class FundApp:
                 
             # 保存到数据库
             try:
-                conn = self.db._get_conn()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE funds SET is_custom = 1 WHERE code = ?", (code,))
-                conn.commit()
-                conn.close()
+                updated_fund = None
+                for f in self.all_funds:
+                    if f.get("code") == code:
+                        updated_fund = f
+                        break
+                if updated_fund:
+                    self.db.save_funds([updated_fund])
             except Exception as e:
                 print(f"数据库加入自选失败: {e}")
                 
