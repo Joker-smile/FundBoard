@@ -44,5 +44,14 @@
         "request_delay": 1.0,
         "retry_count": 3,
         "timeout": 30
+    },
+    "EMAIL_SETTINGS": {
+        "enabled": false,
+        "smtp_server": "smtp.qq.com",
+        "smtp_port": 465,
+        "sender_email": "",
+        "sender_password": "",
+        "receiver_email": "",
+        "check_interval_mins": 30
     }
 }

@@ -20,7 +20,7 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from config import APP_SETTINGS
+from config import APP_SETTINGS, EMAIL_SETTINGS
 from database import FundDatabase
 from data_sources import AntFundDataSource, EastMoneyDataSource, MorningstarDataSource
 from export import export_to_csv, export_to_excel
@@ -28,6 +28,9 @@ from gui.dialogs import AboutDialog, HistoryDialog, SettingsDialog
 from gui.status_bar import StatusBar
 from gui.table_view import FundTableView
 from gui.toolbar import ToolBar
+import smtplib
+from email.mime.text import MIMEText
+from email.header import Header
 
 
 class FundApp:
@@ -71,6 +74,10 @@ class FundApp:
         self._bind_events()
         self._center_window()
         self._load_cached_data()
+
+        # 邮件监控定时任务 ID
+        self.mail_monitor_job = None
+        self._setup_mail_monitor()
 
     def _setup_ui(self):
         """构建主界面布局"""
@@ -154,6 +161,7 @@ class FundApp:
         self.table_view.set_double_click_callback(self._show_fund_webview)
         self.table_view.set_history_callback(self._show_fund_history)
         self.table_view.set_delete_custom_callback(self._delete_custom_fund)
+        self.table_view.set_add_custom_callback(self._add_custom_fund)
         self.table_view.on_right_click = self._update_selected_funds
         
         # 添加自选回调
@@ -637,14 +645,14 @@ class FundApp:
         self.status_bar.set_status(f"已获取 {count} 只自选基金数据", "success")
                 
     def _delete_custom_fund(self, fund):
-        """删除自选基金"""
+        """取消自选基金"""
         if not fund:
             return
             
         code = fund.get("code")
         name = fund.get("name")
         
-        if messagebox.askyesno("删除自选", f"确定要从自选列表中删除 {name} ({code}) 吗？", parent=self.root):
+        if messagebox.askyesno("取消自选", f"确定要将 {name} ({code}) 取消自选吗？", parent=self.root):
             has_index = False
             for f in self.all_funds:
                 if f.get("code") == code:
@@ -665,11 +673,50 @@ class FundApp:
                 conn.commit()
                 conn.close()
             except Exception as e:
-                print(f"从数据库删除失败: {e}")
+                print(f"从数据库取消自选失败: {e}")
             
             # 刷新显示
             self._apply_filter_and_search()
-            messagebox.showinfo("成功", f"已删除自选基金 {name}", parent=self.root)
+            messagebox.showinfo("成功", f"已取消自选基金 {name}", parent=self.root)
+
+    def _add_custom_fund(self, fund):
+        """将选中基金加入自选列表"""
+        if not fund:
+            return
+            
+        code = fund.get("code")
+        name = fund.get("name")
+        
+        if messagebox.askyesno("加入自选", f"确定要将 {name} ({code}) 加入自选列表吗？", parent=self.root):
+            # 更新内存
+            found = False
+            for f in self.all_funds:
+                if f.get("code") == code:
+                    f["is_custom"] = 1
+                    found = True
+                    break
+            
+            if not found:
+                self.all_funds.append({
+                    "code": code,
+                    "name": name,
+                    "is_custom": 1,
+                    "purchase_limit": fund.get("purchase_limit", "")
+                })
+                
+            # 保存到数据库
+            try:
+                conn = self.db._get_conn()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE funds SET is_custom = 1 WHERE code = ?", (code,))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"数据库加入自选失败: {e}")
+                
+            # 刷新显示
+            self._apply_filter_and_search()
+            messagebox.showinfo("成功", f"已成功加入自选基金 {name}", parent=self.root)
                     
     def _show_fund_history(self, fund):
         """显示基金历史净值"""
@@ -814,14 +861,179 @@ except Exception as e:
             # 刷新工具栏过滤按钮
             self.toolbar.rebuild_filters()
             self._apply_filter_and_search()
+            # 重新启动或设置邮件监控
+            self._setup_mail_monitor()
 
     def _on_close(self):
         """窗口关闭事件"""
         # 取消自动刷新任务
         if self.auto_refresh_job is not None:
             self.root.after_cancel(self.auto_refresh_job)
+        # 取消邮件监控任务
+        if self.mail_monitor_job is not None:
+            self.root.after_cancel(self.mail_monitor_job)
 
         self.root.destroy()
+
+    def _setup_mail_monitor(self):
+        """设置自选基金交易状态邮件监控定时任务"""
+        # 取消之前的定时
+        if self.mail_monitor_job is not None:
+            self.root.after_cancel(self.mail_monitor_job)
+            self.mail_monitor_job = None
+
+        if not EMAIL_SETTINGS.get("enabled", False):
+            return
+
+        interval_mins = EMAIL_SETTINGS.get("check_interval_mins", 30)
+        if interval_mins <= 0:
+            return
+
+        interval_ms = interval_mins * 60 * 1000
+
+        def run_check():
+            self._check_custom_funds_status()
+            # 设置下一次定时
+            self.mail_monitor_job = self.root.after(interval_ms, run_check)
+
+        # 首次延迟一会儿执行（例如10秒，防止启动时网络卡顿），然后开始定时
+        self.mail_monitor_job = self.root.after(10000, run_check)
+
+    def _check_custom_funds_status(self):
+        """在后台线程检查自选基金的交易状态"""
+        def task():
+            import time
+            from data_sources.eastmoney import EastMoneyDataSource
+            
+            # 获取所有自选基金
+            custom_funds = []
+            try:
+                conn = self.db._get_conn()
+                cursor = conn.cursor()
+                cursor.execute("SELECT code, name, purchase_limit FROM funds WHERE is_custom = 1")
+                rows = cursor.fetchall()
+                conn.close()
+                for row in rows:
+                    custom_funds.append({
+                        "code": row[0],
+                        "name": row[1],
+                        "purchase_limit": row[2] or ""
+                    })
+            except Exception as e:
+                print(f"读取自选基金出错: {e}")
+                return
+
+            if not custom_funds:
+                return
+
+            # 对每一个自选基金获取最新的状态
+            ds = EastMoneyDataSource()
+            changed_funds = []
+            
+            for fund in custom_funds:
+                code = fund["code"]
+                name = fund["name"]
+                old_status = fund["purchase_limit"]
+                
+                try:
+                    # 抓取最新交易状态
+                    new_status = ds._fetch_purchase_limit(code)
+                    # 避免短暂网络错误导致状态变为空
+                    if not new_status:
+                        continue
+                    
+                    if new_status != old_status:
+                        # 状态发生变化了！
+                        changed_funds.append({
+                            "code": code,
+                            "name": name,
+                            "old": old_status or "无",
+                            "new": new_status
+                        })
+                        # 更新数据库中的状态
+                        conn = self.db._get_conn()
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE funds SET purchase_limit = ? WHERE code = ?", (new_status, code))
+                        conn.commit()
+                        conn.close()
+                        
+                        # 同时也同步内存中的 all_funds
+                        for f in self.all_funds:
+                            if f.get("code") == code:
+                                f["purchase_limit"] = new_status
+                                break
+                except Exception as ex:
+                    print(f"检查自选基金 {code} 状态失败: {ex}")
+                
+                # 间隔一个小延迟，避免抓取太频繁被限制
+                time.sleep(1.0)
+                
+            if changed_funds:
+                # 在主线程更新界面，并发送邮件通知
+                self.root.after(0, self._on_custom_funds_changed, changed_funds)
+                
+        thread = threading.Thread(target=task, daemon=True)
+        thread.start()
+
+    def _on_custom_funds_changed(self, changed_funds):
+        """主线程中处理交易状态变更：刷新界面，发送邮件"""
+        # 刷新UI
+        self._apply_filter_and_search()
+        
+        # 状态栏提示
+        self.status_bar.set_status(f"📢 监控到 {len(changed_funds)} 只自选基金状态变化，已发送邮件提醒", "info")
+        
+        # 发送邮件
+        self._send_status_email(changed_funds)
+
+    def _send_status_email(self, changed_funds):
+        """发送邮件通知"""
+        if not EMAIL_SETTINGS.get("enabled", False):
+            return
+            
+        smtp_server = EMAIL_SETTINGS.get("smtp_server", "")
+        smtp_port = EMAIL_SETTINGS.get("smtp_port", 465)
+        sender_email = EMAIL_SETTINGS.get("sender_email", "")
+        sender_password = EMAIL_SETTINGS.get("sender_password", "")
+        receiver_email = EMAIL_SETTINGS.get("receiver_email", "")
+        
+        if not smtp_server or not sender_email or not sender_password or not receiver_email:
+            print("邮件配置不完整，跳过发送")
+            return
+            
+        # 构造邮件内容
+        subject = "【基金状态变更提醒】您的自选基金有新的交易状态"
+        
+        content = "您好，系统监控到您的以下自选基金交易状态发生改变，请及时关注：\n\n"
+        for fund in changed_funds:
+            content += f"● 【{fund['name']} ({fund['code']})】\n"
+            content += f"  - 原状态：{fund['old']}\n"
+            content += f"  - 新状态：{fund['new']}\n\n"
+        content += f"监控更新时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        
+        def send_task():
+            try:
+                message = MIMEText(content, 'plain', 'utf-8')
+                message['From'] = Header(f"基金获取工具 <{sender_email}>", 'utf-8')
+                message['To'] = Header(receiver_email, 'utf-8')
+                message['Subject'] = Header(subject, 'utf-8')
+                
+                # 兼容 SSL 和 TLS
+                if smtp_port == 465:
+                    server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10)
+                else:
+                    server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+                    server.starttls()
+                
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, [receiver_email], message.as_string())
+                server.quit()
+                print("交易状态变更通知邮件发送成功")
+            except Exception as e:
+                print(f"邮件发送失败: {e}")
+                
+        t = threading.Thread(target=send_task, daemon=True)
+        t.start()
 
     # ============================
     # 启动

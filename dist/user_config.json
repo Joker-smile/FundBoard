@@ -1,0 +1,32 @@
+{
+    "INDEX_KEYWORDS": {
+        "纳指": [
+            "纳斯达克",
+            "纳指100",
+            "纳指"
+        ],
+        "标普": [
+            "标普500",
+            "标普"
+        ],
+        "道指": [
+            "道琼斯",
+            "道指"
+        ]
+    },
+    "APP_SETTINGS": {
+        "request_delay": 1.0,
+        "retry_count": 3,
+        "timeout": 30,
+        "history_limit": 30
+    },
+    "EMAIL_SETTINGS": {
+        "enabled": true,
+        "smtp_server": "smtp.qq.com",
+        "smtp_port": 465,
+        "sender_email": "1020733278@qq.com",
+        "sender_password": "wlwhuijixntgbfcc",
+        "receiver_email": "1020733278@qq.com",
+        "check_interval_mins": 1440
+    }
+}

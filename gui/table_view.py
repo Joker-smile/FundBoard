@@ -47,6 +47,7 @@ class FundTableView(ttk.Frame):
         self._history_callback: Optional[Callable] = None
         self._right_click_callback: Optional[Callable] = None
         self._delete_custom_callback: Optional[Callable] = None
+        self._add_custom_callback: Optional[Callable] = None
         self._is_dark_theme = True
 
         self._setup_ui()
@@ -147,10 +148,14 @@ class FundTableView(ttk.Frame):
                 if fund:
                     menu.add_command(label="📈 查看历史净值图表", command=lambda f=fund: self._history_callback(f))
                     
-                    # 只有自选基金才能删除
-                    if (fund.get("is_custom") == 1 or fund.get("index_type") == "自选") and self._delete_custom_callback:
+                    # 根据是否已经是自选，显示加入自选或取消自选
+                    is_custom_fund = (fund.get("is_custom") == 1 or fund.get("index_type") == "自选")
+                    if is_custom_fund and self._delete_custom_callback:
                         menu.add_separator()
-                        menu.add_command(label="🗑️ 删除自选", command=lambda f=fund: self._delete_custom_callback(f))
+                        menu.add_command(label="🗑️ 取消自选", command=lambda f=fund: self._delete_custom_callback(f))
+                    elif not is_custom_fund and self._add_custom_callback:
+                        menu.add_separator()
+                        menu.add_command(label="⭐ 加入自选", command=lambda f=fund: self._add_custom_callback(f))
                     
             if menu.index("end") is not None:
                 menu.post(event.x_root, event.y_root)
@@ -321,6 +326,10 @@ class FundTableView(ttk.Frame):
     def set_delete_custom_callback(self, callback: Callable):
         """设置删除自选的回调函数"""
         self._delete_custom_callback = callback
+
+    def set_add_custom_callback(self, callback: Callable):
+        """设置加入自选的回调函数"""
+        self._add_custom_callback = callback
 
     def get_all_data(self) -> List[Dict]:
         """返回当前显示的所有数据"""

@@ -120,6 +120,15 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 USER_CONFIG_FILE = os.path.join(BASE_DIR, "user_config.json")
+EMAIL_SETTINGS = {
+    "enabled": False,
+    "smtp_server": "smtp.qq.com",
+    "smtp_port": 465,
+    "sender_email": "",
+    "sender_password": "",
+    "receiver_email": "",
+    "check_interval_mins": 30,
+}
 
 def load_user_config():
     if os.path.exists(USER_CONFIG_FILE):
@@ -133,13 +142,19 @@ def load_user_config():
                 
             if "APP_SETTINGS" in user_conf:
                 APP_SETTINGS.update(user_conf["APP_SETTINGS"])
+
+            if "EMAIL_SETTINGS" in user_conf:
+                EMAIL_SETTINGS.update(user_conf["EMAIL_SETTINGS"])
         except Exception as e:
             print(f"加载用户配置失败: {e}")
 
-def save_user_config(keywords_dict, settings_dict):
+def save_user_config(keywords_dict, settings_dict, email_dict=None):
+    if email_dict is None:
+        email_dict = EMAIL_SETTINGS
     user_conf = {
         "INDEX_KEYWORDS": keywords_dict,
-        "APP_SETTINGS": settings_dict
+        "APP_SETTINGS": settings_dict,
+        "EMAIL_SETTINGS": email_dict
     }
     try:
         with open(USER_CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -148,6 +163,7 @@ def save_user_config(keywords_dict, settings_dict):
         INDEX_KEYWORDS.clear()
         INDEX_KEYWORDS.update(keywords_dict)
         APP_SETTINGS.update(settings_dict)
+        EMAIL_SETTINGS.update(email_dict)
         return True
     except Exception as e:
         print(f"保存用户配置失败: {e}")

@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Dict, List
 
-from config import APP_SETTINGS, INDEX_KEYWORDS, save_user_config
+from config import APP_SETTINGS, INDEX_KEYWORDS, EMAIL_SETTINGS, save_user_config
 
 
 class HistoryDialog(tk.Toplevel):
@@ -264,7 +264,7 @@ class SettingsDialog(tk.Toplevel):
         super().__init__(parent)
 
         self.title("设置")
-        self.geometry("520x650")
+        self.geometry("550x650")
         self.resizable(True, True)
         self.transient(parent)
         self.grab_set()
@@ -272,7 +272,7 @@ class SettingsDialog(tk.Toplevel):
         self._settings = current_settings or {}
         self._result = None
 
-        self._center_window(520, 650)
+        self._center_window(550, 650)
         self._setup_ui()
 
     def _center_window(self, width: int, height: int):
@@ -286,44 +286,59 @@ class SettingsDialog(tk.Toplevel):
 
     def _setup_ui(self):
         """构建界面"""
-        main_frame = ttk.Frame(self, padding=20)
+        main_frame = ttk.Frame(self, padding=15)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # 标题
         ttk.Label(
             main_frame,
             text="⚙️ 应用设置",
-            font=("Microsoft YaHei", 13, "bold"),
-        ).pack(pady=(0, 16), anchor="w")
+            font=("Microsoft YaHei", 12, "bold"),
+        ).pack(pady=(0, 10), anchor="w")
 
-        # 设置区域
-        settings_frame = ttk.LabelFrame(main_frame, text="网络设置", padding=12)
-        settings_frame.pack(fill=tk.X, pady=(0, 12))
+        # 创建 Notebook 选项卡
+        notebook = ttk.Notebook(main_frame)
+        notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        # 选项卡 1：基础设置
+        base_tab = ttk.Frame(notebook, padding=10)
+        notebook.add(base_tab, text="基础设置")
+
+        # 选项卡 2：邮件监控
+        mail_tab = ttk.Frame(notebook, padding=10)
+        notebook.add(mail_tab, text="邮件监控")
+
+        # ==========================================
+        # 选项卡 1 内容构建
+        # ==========================================
+        # 网络设置 LabelFrame
+        settings_frame = ttk.LabelFrame(base_tab, text="网络设置", padding=10)
+        settings_frame.pack(fill=tk.X, pady=(0, 10))
 
         # 请求延迟
         row1 = ttk.Frame(settings_frame)
         row1.pack(fill=tk.X, pady=4)
         ttk.Label(row1, text="请求延迟 (秒):", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
-        self.delay_var = tk.StringVar(value=str(self._settings.get("request_delay", 1.0)))
+        self.delay_var = tk.StringVar(value=str(self._settings.get("request_delay", APP_SETTINGS.get("request_delay", 1.0))))
         ttk.Entry(row1, textvariable=self.delay_var, width=10, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=4)
 
         # 重试次数
         row2 = ttk.Frame(settings_frame)
         row2.pack(fill=tk.X, pady=4)
         ttk.Label(row2, text="重试次数:", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
-        self.retry_var = tk.StringVar(value=str(self._settings.get("retry_count", 3)))
+        self.retry_var = tk.StringVar(value=str(self._settings.get("retry_count", APP_SETTINGS.get("retry_count", 3))))
         ttk.Entry(row2, textvariable=self.retry_var, width=10, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=4)
 
         # 超时时间
         row3 = ttk.Frame(settings_frame)
         row3.pack(fill=tk.X, pady=4)
         ttk.Label(row3, text="超时时间 (秒):", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
-        self.timeout_var = tk.StringVar(value=str(self._settings.get("timeout", 30)))
+        self.timeout_var = tk.StringVar(value=str(self._settings.get("timeout", APP_SETTINGS.get("timeout", 30))))
         ttk.Entry(row3, textvariable=self.timeout_var, width=10, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=4)
 
-        # 数据设置
-        data_frame = ttk.LabelFrame(main_frame, text="数据设置", padding=12)
-        data_frame.pack(fill=tk.X, pady=(0, 12))
+        # 数据设置 LabelFrame
+        data_frame = ttk.LabelFrame(base_tab, text="数据设置", padding=10)
+        data_frame.pack(fill=tk.X, pady=(0, 10))
 
         row4 = ttk.Frame(data_frame)
         row4.pack(fill=tk.X, pady=4)
@@ -334,14 +349,14 @@ class SettingsDialog(tk.Toplevel):
         row5 = ttk.Frame(data_frame)
         row5.pack(fill=tk.X, pady=4)
         ttk.Label(row5, text="历史记录条数:", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
-        self.history_limit_var = tk.StringVar(value=str(self._settings.get("history_limit", 30)))
+        self.history_limit_var = tk.StringVar(value=str(self._settings.get("history_limit", APP_SETTINGS.get("history_limit", 30))))
         ttk.Entry(row5, textvariable=self.history_limit_var, width=10, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=4)
 
-        # 指数关键词设置
-        keyword_frame = ttk.LabelFrame(main_frame, text="指数自定义 (格式: 名称: 关键词1, 关键词2)", padding=12)
-        keyword_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
+        # 指数关键词设置 LabelFrame
+        keyword_frame = ttk.LabelFrame(base_tab, text="指数自定义 (格式: 名称: 关键词1, 关键词2)", padding=10)
+        keyword_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
         
-        self.keyword_text = tk.Text(keyword_frame, height=6, font=("Microsoft YaHei", 9))
+        self.keyword_text = tk.Text(keyword_frame, height=5, font=("Microsoft YaHei", 9))
         self.keyword_text.pack(fill=tk.BOTH, expand=True)
         
         # 加载当前关键词
@@ -350,9 +365,80 @@ class SettingsDialog(tk.Toplevel):
             keyword_lines.append(f"{name}: {', '.join(kws)}")
         self.keyword_text.insert("1.0", "\n".join(keyword_lines))
 
-        # 按钮区域
+        # ==========================================
+        # 选项卡 2 内容构建
+        # ==========================================
+        # 启用开关
+        row_enabled = ttk.Frame(mail_tab)
+        row_enabled.pack(fill=tk.X, pady=6)
+        self.mail_enabled_var = tk.BooleanVar(value=EMAIL_SETTINGS.get("enabled", False))
+        ttk.Checkbutton(
+            row_enabled,
+            text="启用自选基金交易状态邮件监控",
+            variable=self.mail_enabled_var,
+        ).pack(side=tk.LEFT)
+
+        # SMTP 服务器
+        row_smtp = ttk.Frame(mail_tab)
+        row_smtp.pack(fill=tk.X, pady=6)
+        ttk.Label(row_smtp, text="SMTP 服务器:", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.smtp_server_var = tk.StringVar(value=EMAIL_SETTINGS.get("smtp_server", "smtp.qq.com"))
+        ttk.Entry(row_smtp, textvariable=self.smtp_server_var, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+
+        # SMTP 端口
+        row_port = ttk.Frame(mail_tab)
+        row_port.pack(fill=tk.X, pady=6)
+        ttk.Label(row_port, text="SMTP 端口:", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.smtp_port_var = tk.StringVar(value=str(EMAIL_SETTINGS.get("smtp_port", 465)))
+        ttk.Entry(row_port, textvariable=self.smtp_port_var, width=10, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=4)
+
+        # 发件人邮箱
+        row_sender = ttk.Frame(mail_tab)
+        row_sender.pack(fill=tk.X, pady=6)
+        ttk.Label(row_sender, text="发件人邮箱:", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.sender_email_var = tk.StringVar(value=EMAIL_SETTINGS.get("sender_email", ""))
+        ttk.Entry(row_sender, textvariable=self.sender_email_var, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+
+        # 发件人授权码
+        row_pwd = ttk.Frame(mail_tab)
+        row_pwd.pack(fill=tk.X, pady=6)
+        ttk.Label(row_pwd, text="授权码 / 密码:", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.sender_password_var = tk.StringVar(value=EMAIL_SETTINGS.get("sender_password", ""))
+        ttk.Entry(row_pwd, textvariable=self.sender_password_var, show="*", font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+
+        # 收件人邮箱
+        row_receiver = ttk.Frame(mail_tab)
+        row_receiver.pack(fill=tk.X, pady=6)
+        ttk.Label(row_receiver, text="收件人邮箱:", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.receiver_email_var = tk.StringVar(value=EMAIL_SETTINGS.get("receiver_email", ""))
+        ttk.Entry(row_receiver, textvariable=self.receiver_email_var, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+
+        # 监控间隔
+        row_interval = ttk.Frame(mail_tab)
+        row_interval.pack(fill=tk.X, pady=6)
+        ttk.Label(row_interval, text="监控间隔 (分钟):", font=("Microsoft YaHei", 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.check_interval_var = tk.StringVar(value=str(EMAIL_SETTINGS.get("check_interval_mins", 30)))
+        ttk.Entry(row_interval, textvariable=self.check_interval_var, width=10, font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=4)
+
+        # 提示说明
+        tip_frame = ttk.LabelFrame(mail_tab, text="⚠️ 配置说明", padding=8)
+        tip_frame.pack(fill=tk.X, pady=(15, 0))
+        ttk.Label(
+            tip_frame,
+            text="1. 发件人邮箱必须开启 SMTP 服务并获取授权码（非邮箱登录密码）。\n"
+                 "2. 开启监控后，应用将在后台定时轮询自选基金交易状态。\n"
+                 "3. 状态一旦发生改变，会向您的收件人邮箱发送通知邮件。\n"
+                 "4. 如果提示发送失败，请检查端口号（SSL一般为465，TLS一般为587）。",
+            font=("Microsoft YaHei", 8),
+            justify=tk.LEFT,
+            wraplength=450,
+        ).pack(fill=tk.X)
+
+        # ==========================================
+        # 公共按钮区域
+        # ==========================================
         btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(fill=tk.X, pady=(8, 0))
+        btn_frame.pack(fill=tk.X, pady=(5, 0))
 
         ttk.Button(
             btn_frame,
@@ -379,6 +465,16 @@ class SettingsDialog(tk.Toplevel):
                 "timeout": int(self.timeout_var.get()),
                 "history_limit": int(self.history_limit_var.get()),
             }
+
+            email_dict = {
+                "enabled": self.mail_enabled_var.get(),
+                "smtp_server": self.smtp_server_var.get().strip(),
+                "smtp_port": int(self.smtp_port_var.get()),
+                "sender_email": self.sender_email_var.get().strip(),
+                "sender_password": self.sender_password_var.get().strip(),
+                "receiver_email": self.receiver_email_var.get().strip(),
+                "check_interval_mins": int(self.check_interval_var.get()),
+            }
             
             # 解析关键词
             text_content = self.keyword_text.get("1.0", tk.END).strip()
@@ -403,15 +499,16 @@ class SettingsDialog(tk.Toplevel):
                 return
                 
             # 保存到文件
-            save_user_config(keywords_dict, settings_dict)
+            save_user_config(keywords_dict, settings_dict, email_dict)
             
             self._result = {
                 "settings": settings_dict,
-                "keywords": keywords_dict
+                "keywords": keywords_dict,
+                "email_settings": email_dict
             }
         except ValueError:
             from tkinter import messagebox
-            messagebox.showwarning("输入错误", "请输入有效的数值", parent=self)
+            messagebox.showwarning("输入错误", "请输入有效的数值！", parent=self)
             return
 
         self.destroy()
