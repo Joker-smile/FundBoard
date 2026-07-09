@@ -325,11 +325,14 @@ class FundApp:
             return
 
         # 合并数据库中现有的自选基金，以防因获取失败而在内存中丢失
+        # 同时也确保在主列表中获取到的自选基金正确标记为 is_custom = 1
         try:
             db_custom = self.db.get_funds(index_type="自选")
-            existing_codes = {f["code"] for f in funds}
+            existing_codes = {f["code"]: f for f in funds}
             for cf in db_custom:
-                if cf["code"] not in existing_codes:
+                if cf["code"] in existing_codes:
+                    existing_codes[cf["code"]]["is_custom"] = 1
+                else:
                     cf["is_custom"] = 1
                     funds.append(cf)
         except Exception as e:
