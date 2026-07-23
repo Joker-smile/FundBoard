@@ -165,7 +165,7 @@ class AntFundDataSource(BaseDataSource):
     def _filter_index_funds(
         self, records: list, index_type: str
     ) -> List[tuple]:
-        """根据关键词和基金类型过滤指数基金。
+        """根据关键词和基金类型过滤指数基金或海外主动基金。
 
         过滤规则同 EastMoneyDataSource。
         """
@@ -187,28 +187,35 @@ class AntFundDataSource(BaseDataSource):
             name = record[2]
             fund_type = record[3]
 
-            # 排除混合型
-            if any(excluded in fund_type for excluded in EXCLUDED_FUND_TYPES):
-                continue
-            if "混合" in fund_type:
-                continue
+            is_index_type = "指数" in fund_type or "指数" in name or ("ETF" in name.upper() and "联接" not in name)
 
-            # 只保留指数型 / QDII
-            type_ok = any(
-                allowed in fund_type for allowed in INDEX_FUND_TYPES
-            )
-            if not type_ok:
-                continue
-
-            # 关键词匹配
+            # 关键词与分类匹配
             for idx_type, keywords in search_map.items():
-                for kw in keywords:
-                    if kw.upper() in name.upper():
+                if idx_type == "海外主动":
+                    is_qdii_or_overseas = (
+                        "QDII" in fund_type
+                        or "QDII" in name.upper()
+                        or any(kw.upper() in name.upper() for kw in keywords)
+                    )
+                    if is_qdii_or_overseas and not is_index_type:
                         if code not in matched:
                             matched[code] = (code, name, idx_type)
                         break
-                if code in matched:
-                    break
+                else:
+                    if "混合" in fund_type and "QDII" not in fund_type:
+                        continue
+
+                    type_ok = any(allowed in fund_type for allowed in INDEX_FUND_TYPES)
+                    if not type_ok:
+                        continue
+                    if "ETF" in name.upper() and "联接" not in name:
+                        continue
+
+                    for kw in keywords:
+                        if kw.upper() in name.upper():
+                            if code not in matched:
+                                matched[code] = (code, name, idx_type)
+                            break
 
         return list(matched.values())
 

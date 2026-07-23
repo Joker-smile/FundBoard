@@ -160,6 +160,7 @@ class FundApp:
         # 表格双击和右键回调
         self.table_view.set_double_click_callback(self._show_fund_webview)
         self.table_view.set_history_callback(self._show_fund_history)
+        self.table_view.set_estimate_callback(self._show_fund_estimate)
         self.table_view.set_delete_custom_callback(self._delete_custom_fund)
         self.table_view.set_add_custom_callback(self._add_custom_fund)
         self.table_view.on_right_click = self._update_selected_funds
@@ -734,6 +735,134 @@ class FundApp:
             self._apply_filter_and_search()
             messagebox.showinfo("成功", f"已成功加入自选基金 {name}", parent=self.root)
                     
+    def _show_fund_estimate(self, fund):
+        """获取并显示单只基金的盘中实时估算涨跌幅。"""
+        if not fund:
+            return
+
+        code = fund.get("code", "")
+        name = fund.get("name", "")
+        if not code:
+            return
+
+        # 状态栏提示
+        if hasattr(self, "status_bar"):
+            self.status_bar.set_status(f"正在获取 {name}({code}) 的实时估算...")
+
+        def worker():
+            try:
+                result = self._fetch_fund_estimate(code)
+                self.root.after(0, self._on_estimate_result, code, name, result)
+            except Exception as exc:
+                self.root.after(0, self._on_estimate_result, code, name, None, str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _fetch_fund_estimate(self, code):
+        """通过天天基金 FundValuationLast 接口获取单只基金盘中实时估值。
+
+        Returns:
+            包含估值信息的字典，请求失败返回 None。
+        """
+        import random
+        import requests
+        from config import USER_AGENTS
+
+        primary_url = "https://fundcomapi.tiantianfunds.com/mm/newCore/FundValuationLast"
+        backup_url = "https://fundcomapi.eastmoney.com/mm/newCore/FundValuationLast"
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Referer": "https://fund.eastmoney.com/",
+        }
+        params = {
+            "FCODES": code,
+            "FIELDS": "FCODE,SHORTNAME,GSZZL,GZTIME,GSZ,NAV,PDATE",
+        }
+
+        for url in (primary_url, backup_url):
+            try:
+                resp = requests.post(url, data=params, headers=headers, timeout=15)
+                data = resp.json()
+                if data.get("success"):
+                    records = data.get("data", [])
+                    if records:
+                        item = records[0]
+                        return {
+                            "code": item.get("FCODE", code),
+                            "name": item.get("SHORTNAME", ""),
+                            "estimate_pct": item.get("GSZZL"),
+                            "estimate_nav": item.get("GSZ"),
+                            "nav": item.get("NAV"),
+                            "nav_date": item.get("PDATE", ""),
+                            "estimate_time": item.get("GZTIME"),
+                        }
+                    return None
+            except Exception:
+                continue
+
+        return None
+
+    def _on_estimate_result(self, code, name, result, error=None):
+        """估算数据获取完成后的 UI 回调。"""
+        if hasattr(self, "status_bar"):
+            self.status_bar.set_status("就绪")
+
+        if error:
+            messagebox.showerror(
+                "获取失败",
+                f"获取 {name}({code}) 估算数据失败：\n{error}",
+                parent=self.root,
+            )
+            return
+
+        if not result:
+            messagebox.showinfo(
+                "暂无数据",
+                f"基金 {code} ({name}) 暂无实时估算数据。\n\n"
+                "可能原因：\n"
+                "• 非交易时段（仅 9:30-15:00 提供盘中估值）\n"
+                "• 该基金为主动管理型，不再提供盘中估值\n"
+                "• 数据源未覆盖该基金",
+                parent=self.root,
+            )
+            return
+
+        estimate_pct = result.get("estimate_pct")
+        estimate_nav = result.get("estimate_nav")
+        nav = result.get("nav")
+        nav_date = result.get("nav_date", "")
+        estimate_time = result.get("estimate_time")
+
+        if estimate_pct is not None:
+            try:
+                pct_val = float(estimate_pct)
+            except (ValueError, TypeError):
+                pct_val = 0.0
+            pct_str = f"{pct_val:+.2f}%"
+            gsz_str = f"{float(estimate_nav):.4f}" if estimate_nav else "--"
+            time_str = estimate_time or "--"
+            info = (
+                f"基金代码：{code}\n"
+                f"基金名称：{name}\n\n"
+                f"💰 估算涨跌幅：{pct_str}\n"
+                f"📈 估算净值：{gsz_str}\n"
+                f"🕒 估值时间：{time_str}\n\n"
+                f"📋 最新单位净值：{f'{float(nav):.4f}' if nav else '--'}\n"
+                f"📅 净值日期：{nav_date}\n\n"
+                f"（盘中估值仅供参考，以基金公司最终公布净值为准）"
+            )
+        else:
+            info = (
+                f"基金代码：{code}\n"
+                f"基金名称：{name}\n\n"
+                f"⚠️ 该基金暂无盘中实时估算数据。\n\n"
+                f"📋 最新单位净值：{f'{float(nav):.4f}' if nav else '--'}\n"
+                f"📅 净值日期：{nav_date}\n\n"
+                f"可能原因：非交易时段，或该基金不再提供盘中估值。"
+            )
+
+        messagebox.showinfo(f"实时估算 - {code}", info, parent=self.root)
+
     def _show_fund_history(self, fund):
         """显示基金历史净值"""
         if not fund:

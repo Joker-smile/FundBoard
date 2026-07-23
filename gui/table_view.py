@@ -48,6 +48,7 @@ class FundTableView(ttk.Frame):
         self._right_click_callback: Optional[Callable] = None
         self._delete_custom_callback: Optional[Callable] = None
         self._add_custom_callback: Optional[Callable] = None
+        self._estimate_callback: Optional[Callable] = None
         self._is_dark_theme = True
 
         self._setup_ui()
@@ -142,7 +143,12 @@ class FundTableView(ttk.Frame):
             
             if self._right_click_callback:
                 menu.add_command(label="🔄 更新选中基金状态", command=self._right_click_callback)
-                
+
+            if self._estimate_callback:
+                fund = self.get_selected_fund()
+                if fund:
+                    menu.add_command(label="💰 获取估算涨跌幅", command=lambda f=fund: self._estimate_callback(f))
+
             if self._history_callback:
                 fund = self.get_selected_fund()
                 if fund:
@@ -322,6 +328,10 @@ class FundTableView(ttk.Frame):
     def set_history_callback(self, callback: Callable):
         """设置查看历史净值的回调函数"""
         self._history_callback = callback
+
+    def set_estimate_callback(self, callback: Callable):
+        """设置获取估算涨跌幅的回调函数"""
+        self._estimate_callback = callback
         
     def set_delete_custom_callback(self, callback: Callable):
         """设置删除自选的回调函数"""

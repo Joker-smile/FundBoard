@@ -68,7 +68,7 @@ class MorningstarDataSource(BaseDataSource):
         fund_type_params = [
             ("gp", "股票型"),
             ("zq", "债券型"),
-            ("qq", "QDII"),
+            ("qdii", "QDII"),
         ]
         
         for ft_code, ft_name in fund_type_params:
@@ -150,7 +150,7 @@ class MorningstarDataSource(BaseDataSource):
         fund_type_params = [
             ("gp", "股票型"),   # 包含指数型-股票
             ("zq", "债券型"),   # 包含指数型-债券
-            ("qq", "QDII"),     # 包含 QDII-指数
+            ("qdii", "QDII"),   # 包含 QDII-指数与QDII主动
         ]
 
         for ft_code, ft_name in fund_type_params:
@@ -262,29 +262,31 @@ class MorningstarDataSource(BaseDataSource):
             if code in seen:
                 continue
 
-            # ---- 名称中需含"指数"或至少是 QDII 指数 ----
-            # 排除混合型
             name_upper = name.upper()
-            if any(exc in name for exc in EXCLUDED_FUND_TYPES):
-                continue
-            if "混合" in name:
-                continue
+            is_index_type = "指数" in name or ("ETF" in name_upper and "联接" not in name)
 
             # ---- 关键词匹配 ----
             matched_type = None
             for idx_type, keywords in search_map.items():
-                for kw in keywords:
-                    if kw.upper() in name_upper:
+                if idx_type == "海外主动":
+                    is_qdii_or_overseas = (
+                        "QDII" in name_upper
+                        or any(kw.upper() in name_upper for kw in keywords)
+                    )
+                    if is_qdii_or_overseas and not is_index_type:
                         matched_type = idx_type
                         break
+                else:
+                    if "混合" in name and "QDII" not in name_upper:
+                        continue
+                    for kw in keywords:
+                        if kw.upper() in name_upper:
+                            matched_type = idx_type
+                            break
                 if matched_type:
                     break
 
             if not matched_type:
-                continue
-
-            # ---- 额外检查：名称中需包含"指数"或属于 QDII ----
-            if "指数" not in name and "QDII" not in name_upper and "ETF" not in name_upper:
                 continue
 
             seen[code] = True

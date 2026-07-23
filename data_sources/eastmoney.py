@@ -161,12 +161,7 @@ class EastMoneyDataSource(BaseDataSource):
     def _filter_index_funds(
         self, records: list, index_type: str
     ) -> List[tuple]:
-        """根据关键词和基金类型过滤指数基金。
-
-        过滤规则：
-        1. 基金名称必须包含 INDEX_KEYWORDS 中的至少一个关键词
-        2. 基金类型必须包含"指数"或"QDII"（在 INDEX_FUND_TYPES 中）
-        3. 基金类型不能包含"混合"（在 EXCLUDED_FUND_TYPES 中）
+        """根据关键词和基金类型过滤指数基金或海外主动基金。
 
         Args:
             records: 全量基金记录。
@@ -194,31 +189,39 @@ class EastMoneyDataSource(BaseDataSource):
             name = record[2]
             fund_type = record[3]
 
-            # ---- 类型过滤 ----
-            # 排除包含"混合"的基金类型
-            if any(excluded in fund_type for excluded in EXCLUDED_FUND_TYPES):
-                continue
-            if "混合" in fund_type:
-                continue
+            is_index_type = "指数" in fund_type or "指数" in name or ("ETF" in name.upper() and "联接" not in name)
 
-            # 只保留包含"指数"或"QDII"的基金类型
-            type_ok = any(
-                allowed in fund_type for allowed in INDEX_FUND_TYPES
-            )
-            if not type_ok:
-                continue
-
-            # 过滤场内 ETF（名称中包含 "ETF" 但不包含 "联接" 的通常是场内基金）
-            if "ETF" in name.upper() and "联接" not in name:
-                continue
-
-            # ---- 关键词匹配 ----
+            # ---- 关键词与分类匹配 ----
             for idx_type, keywords in search_map.items():
-                for kw in keywords:
-                    if kw.upper() in name.upper():
+                if idx_type == "海外主动":
+                    # 海外主动基金判定规则：
+                    # 1. 基金类型包含 QDII 或属于海外主动相关，或名称包含 QDII/海外关键词
+                    # 2. 必须是主动型（非被动指数型）
+                    is_qdii_or_overseas = (
+                        "QDII" in fund_type
+                        or "QDII" in name.upper()
+                        or any(kw.upper() in name.upper() for kw in keywords)
+                    )
+                    if is_qdii_or_overseas and not is_index_type:
                         if code not in matched:
                             matched[code] = (code, name, idx_type)
-                        break  # 同一 idx_type 命中即停
+                        break
+                else:
+                    # 指数型基金判定规则
+                    if "混合" in fund_type and "QDII" not in fund_type:
+                        continue
+
+                    type_ok = any(allowed in fund_type for allowed in INDEX_FUND_TYPES)
+                    if not type_ok:
+                        continue
+                    if "ETF" in name.upper() and "联接" not in name:
+                        continue
+
+                    for kw in keywords:
+                        if kw.upper() in name.upper():
+                            if code not in matched:
+                                matched[code] = (code, name, idx_type)
+                            break  # 同一 idx_type 命中即停
 
         return list(matched.values())
 
