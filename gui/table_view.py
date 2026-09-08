@@ -19,15 +19,18 @@ class FundTableView(ttk.Frame):
 
     # 列定义: (列ID, 列标题, 宽度, 对齐方式)
     COLUMNS = [
-        ("code", "基金代码", 80, "center"),
-        ("name", "基金名称", 180, "center"),
-        ("purchase_limit", "交易状态", 220, "center"),
-        ("index_type", "跟踪指数", 80, "center"),
-        ("nav", "单位净值", 90, "center"),
-        ("nav_date", "净值日期", 90, "center"),
-        ("acc_nav", "累计净值", 90, "center"),
-        ("daily_change", "日增长值", 90, "center"),
-        ("daily_change_pct", "日增长率(%)", 100, "center"),
+        ("code", "基金代码", 75, "center"),
+        ("name", "基金名称", 170, "center"),
+        ("purchase_limit", "交易状态", 200, "center"),
+        ("index_type", "跟踪指数", 75, "center"),
+        ("manage_fee", "管理费率", 95, "center"),
+        ("custody_fee", "托管费率", 95, "center"),
+        ("sales_fee", "销售服务费率", 100, "center"),
+        ("nav", "单位净值", 80, "center"),
+        ("nav_date", "净值日期", 85, "center"),
+        ("acc_nav", "累计净值", 80, "center"),
+        ("daily_change", "日增长值", 80, "center"),
+        ("daily_change_pct", "日增长率(%)", 95, "center"),
     ]
 
     # 涨跌着色
@@ -226,7 +229,7 @@ class FundTableView(ttk.Frame):
 
     def _format_value(self, key: str, value) -> str:
         """格式化显示值"""
-        if value is None:
+        if value is None or value == "":
             return "--"
 
         if key in ("nav", "acc_nav"):
@@ -252,6 +255,8 @@ class FundTableView(ttk.Frame):
                 return f"{v:+.2f}" if v != 0 else "0.00"
             except (ValueError, TypeError):
                 return str(value)
+        elif key in ("manage_fee", "custody_fee", "sales_fee"):
+            return str(value)
 
         return str(value)
 
@@ -304,6 +309,7 @@ class FundTableView(ttk.Frame):
         """按指定列排序"""
         # 数值列需要数值排序
         numeric_cols = {"nav", "acc_nav", "daily_change", "daily_change_pct", "since_inception"}
+        fee_cols = {"manage_fee", "custody_fee", "sales_fee"}
 
         def sort_key(fund):
             val = fund.get(col, "")
@@ -312,6 +318,20 @@ class FundTableView(ttk.Frame):
                     return float(val) if val is not None else float("-inf")
                 except (ValueError, TypeError):
                     return float("-inf")
+            elif col in fee_cols:
+                s_val = str(val or "").strip()
+                if s_val == "---":
+                    return 0.0
+                if not s_val or s_val == "--":
+                    return float("-inf") if reverse else float("inf")
+                import re
+                m = re.search(r"(\d+\.?\d*)", s_val)
+                if m:
+                    try:
+                        return float(m.group(1))
+                    except (ValueError, TypeError):
+                        pass
+                return float("-inf") if reverse else float("inf")
             return str(val or "").lower()
 
         self._funds_data.sort(key=sort_key, reverse=reverse)

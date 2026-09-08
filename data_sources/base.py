@@ -88,5 +88,8 @@ class BaseDataSource(ABC):
             "since_inception": kwargs.get("since_inception"),
             "purchase_limit": kwargs.get("purchase_limit", ""),
             "purchase_status": kwargs.get("purchase_status", ""),
+            "manage_fee": kwargs.get("manage_fee", ""),
+            "custody_fee": kwargs.get("custody_fee", ""),
+            "sales_fee": kwargs.get("sales_fee", ""),
             "data_source": self.get_source_name(),
         }

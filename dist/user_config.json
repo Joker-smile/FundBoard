@@ -33,6 +33,6 @@
         "sender_email": "1020733278@qq.com",
         "sender_password": "wlwhuijixntgbfcc",
         "receiver_email": "1020733278@qq.com",
-        "check_interval_mins": 1440
+        "check_interval_mins": 1
     }
 }

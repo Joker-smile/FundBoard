@@ -249,8 +249,8 @@ class EastMoneyDataSource(BaseDataSource):
         # ---- 成立来收益率（允许失败） ----
         since_inception = self._fetch_since_inception(code)
 
-        # ---- 申购限额（允许失败） ----
-        purchase_limit = self._fetch_purchase_limit(code)
+        # ---- 申购限额与运作费用（允许失败） ----
+        detail_info = self._fetch_page_details(code)
 
         return self._create_fund_dict(
             code=code,
@@ -262,8 +262,11 @@ class EastMoneyDataSource(BaseDataSource):
             daily_change=nav_info.get("daily_change"),
             daily_change_pct=nav_info.get("daily_change_pct"),
             since_inception=since_inception,
-            purchase_limit=purchase_limit,
+            purchase_limit=detail_info.get("purchase_limit", ""),
             purchase_status=nav_info.get("purchase_status", ""),
+            manage_fee=detail_info.get("manage_fee", "--"),
+            custody_fee=detail_info.get("custody_fee", "--"),
+            sales_fee=detail_info.get("sales_fee", "--"),
         )
 
     # ===========================================================
@@ -366,34 +369,68 @@ class EastMoneyDataSource(BaseDataSource):
             return None
 
     # ===========================================================
-    # Step 5 - 获取申购限额
+    # Step 5 - 获取申购限额与运作费用
     # ===========================================================
 
-    def _fetch_purchase_limit(self, code: str) -> str:
-        """从基金详情页解析完整的交易状态（包括限额等信息）。
+    def _fetch_page_details(self, code: str) -> Dict[str, str]:
+        """从基金详情页解析完整的交易状态（包括限额）以及运作费用（管理费、托管费、销售服务费）。
 
         Returns:
-            完整的交易状态字符串，获取失败返回空字符串。
+            包含 purchase_limit, manage_fee, custody_fee, sales_fee 的字典。
         """
+        details = {
+            "purchase_limit": "",
+            "manage_fee": "--",
+            "custody_fee": "--",
+            "sales_fee": "--",
+        }
         try:
             url = EASTMONEY_CONFIG["fund_detail_url"].format(code=code)
             resp = requester.get(url, referer=EASTMONEY_CONFIG["referer"])
             resp.encoding = "utf-8"
             html = resp.text
 
-            # 直接提取带有详细状态和限额的 label 内容
+            # 提取交易状态与限额
             match = re.search(r'<label>.*?交易状态：(.*?)</label>', html, re.DOTALL)
             if match:
                 raw_text = match.group(1)
                 clean_text = re.sub(r'<[^>]+>', '', raw_text)
                 clean_text = re.sub(r'\s+', ' ', clean_text).strip()
                 clean_text = clean_text.replace("&nbsp;", " ")
-                return clean_text
+                details["purchase_limit"] = clean_text
 
-            return ""
+            # 提取管理费率
+            m_manage = re.search(r'<th>\s*管理费率\s*</th>\s*<td[^>]*>(.*?)</td>', html)
+            if m_manage:
+                val = re.sub(r'<[^>]+>', '', m_manage.group(1)).strip()
+                details["manage_fee"] = val or "--"
+
+            # 提取托管费率
+            m_custody = re.search(r'<th>\s*托管费率\s*</th>\s*<td[^>]*>(.*?)</td>', html)
+            if m_custody:
+                val = re.sub(r'<[^>]+>', '', m_custody.group(1)).strip()
+                details["custody_fee"] = val or "--"
+
+            # 提取销售服务费率
+            m_sales = re.search(r'<th>\s*销售服务费率\s*</th>\s*<td[^>]*>(.*?)</td>', html)
+            if m_sales:
+                val = re.sub(r'<[^>]+>', '', m_sales.group(1)).strip()
+                if val.startswith("---"):
+                    val = "---"
+                details["sales_fee"] = val or "--"
+
+            return details
         except Exception as exc:
-            logger.debug("获取交易状态失败 [%s]: %s", code, exc)
-            return ""
+            logger.debug("获取详情页信息失败 [%s]: %s", code, exc)
+            return details
+
+    def _fetch_purchase_limit(self, code: str) -> str:
+        """从基金详情页解析完整的交易状态（包括限额等信息，供外部如邮件监控兼容调用）。
+
+        Returns:
+            完整的交易状态字符串，获取失败返回空字符串。
+        """
+        return self._fetch_page_details(code).get("purchase_limit", "")
 
     def search_fund(self, keyword: str) -> List[Dict]:
         """通过天天基金的搜索接口搜索基金"""

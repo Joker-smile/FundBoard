@@ -312,6 +312,27 @@ class AntFundDataSource(BaseDataSource):
             if limit_val:
                 purchase_limit = str(limit_val)
 
+            # 运作费用
+            manage_fee = "--"
+            custody_fee = "--"
+            sales_fee = "--"
+            other_rates = data.get("fund_rates", {}).get("other_rate_table", []) or []
+            for item in other_rates:
+                r_name = item.get("name", "")
+                r_val = item.get("value")
+                if r_val is not None:
+                    try:
+                        formatted_val = f"{float(r_val):.2f}%（每年）"
+                    except (ValueError, TypeError):
+                        formatted_val = f"{r_val}%（每年）"
+
+                    if "管理" in r_name:
+                        manage_fee = formatted_val
+                    elif "托管" in r_name:
+                        custody_fee = formatted_val
+                    elif "销售" in r_name or "服务" in r_name:
+                        sales_fee = formatted_val
+
             return self._create_fund_dict(
                 code=code,
                 name=name,
@@ -324,6 +345,9 @@ class AntFundDataSource(BaseDataSource):
                 since_inception=since_inception,
                 purchase_limit=purchase_limit,
                 purchase_status=purchase_status,
+                manage_fee=manage_fee,
+                custody_fee=custody_fee,
+                sales_fee=sales_fee,
             )
 
         except Exception as exc:

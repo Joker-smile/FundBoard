@@ -645,6 +645,9 @@ class FundApp:
                         "daily_change": None, "daily_change_pct": None,
                         "since_inception": None, "purchase_limit": "",
                         "purchase_status": "", "data_source": "",
+                        "manage_fee": fund.get("manage_fee", "--"),
+                        "custody_fee": fund.get("custody_fee", "--"),
+                        "sales_fee": fund.get("sales_fee", "--"),
                         "is_custom": 1,
                     })
 
@@ -716,7 +719,10 @@ class FundApp:
                     "code": code,
                     "name": name,
                     "is_custom": 1,
-                    "purchase_limit": fund.get("purchase_limit", "")
+                    "purchase_limit": fund.get("purchase_limit", ""),
+                    "manage_fee": fund.get("manage_fee", "--"),
+                    "custody_fee": fund.get("custody_fee", "--"),
+                    "sales_fee": fund.get("sales_fee", "--")
                 })
                 
             # 保存到数据库

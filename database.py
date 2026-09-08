@@ -64,16 +64,21 @@ class FundDatabase:
                     purchase_status TEXT DEFAULT '',
                     data_source     TEXT DEFAULT '',
                     updated_at      TEXT,
-                    is_custom       INTEGER DEFAULT 0
+                    is_custom       INTEGER DEFAULT 0,
+                    manage_fee      TEXT DEFAULT '',
+                    custody_fee     TEXT DEFAULT '',
+                    sales_fee       TEXT DEFAULT ''
                 );
             """)
 
-            # 尝试添加 is_custom 字段，防止已有表结构冲突
-            try:
-                cursor.execute("ALTER TABLE funds ADD COLUMN is_custom INTEGER DEFAULT 0;")
-            except sqlite3.OperationalError:
-                # 字段可能已经存在，忽略错误
-                pass
+            # 尝试添加新增字段，兼容已有数据库结构
+            for col in ("is_custom", "manage_fee", "custody_fee", "sales_fee"):
+                try:
+                    default_val = "0" if col == "is_custom" else "''"
+                    cursor.execute(f"ALTER TABLE funds ADD COLUMN {col} TEXT DEFAULT {default_val};")
+                except sqlite3.OperationalError:
+                    # 字段已存在，忽略错误
+                    pass
 
             # ---------- nav_history 表 ----------
             cursor.execute("""
@@ -134,8 +139,9 @@ class FundDatabase:
                     INSERT INTO funds
                         (code, name, index_type, nav, nav_date, acc_nav,
                          daily_change, daily_change_pct, since_inception,
-                         purchase_limit, purchase_status, data_source, updated_at, is_custom)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         purchase_limit, purchase_status, data_source, updated_at, is_custom,
+                         manage_fee, custody_fee, sales_fee)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(code) DO UPDATE SET
                         name=excluded.name,
                         index_type=excluded.index_type,
@@ -149,7 +155,10 @@ class FundDatabase:
                         purchase_status=excluded.purchase_status,
                         data_source=excluded.data_source,
                         updated_at=excluded.updated_at,
-                        is_custom=CASE WHEN excluded.is_custom = 1 THEN 1 ELSE funds.is_custom END
+                        is_custom=CASE WHEN excluded.is_custom = 1 THEN 1 ELSE funds.is_custom END,
+                        manage_fee=CASE WHEN excluded.manage_fee != '' AND excluded.manage_fee != '--' THEN excluded.manage_fee ELSE funds.manage_fee END,
+                        custody_fee=CASE WHEN excluded.custody_fee != '' AND excluded.custody_fee != '--' THEN excluded.custody_fee ELSE funds.custody_fee END,
+                        sales_fee=CASE WHEN excluded.sales_fee != '' AND excluded.sales_fee != '--' THEN excluded.sales_fee ELSE funds.sales_fee END
                 """, (
                     fund.get("code", ""),
                     fund.get("name", ""),
@@ -165,6 +174,9 @@ class FundDatabase:
                     fund.get("data_source", ""),
                     now,
                     fund.get("is_custom", 0),
+                    fund.get("manage_fee", ""),
+                    fund.get("custody_fee", ""),
+                    fund.get("sales_fee", ""),
                 ))
 
                 # 同时插入 nav_history（忽略重复）
