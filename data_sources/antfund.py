@@ -291,7 +291,7 @@ class AntFundDataSource(BaseDataSource):
                     except Exception:
                         nav_date = ""
 
-            # 成立来收益
+            # 成立来收益与近1年涨跌幅
             since_inception = None
             inception_val = derived.get("inception_growth")
             if inception_val is not None and inception_val != "":
@@ -299,6 +299,10 @@ class AntFundDataSource(BaseDataSource):
                     since_inception = f"{float(inception_val) * 100:.2f}%"
                 except (ValueError, TypeError):
                     since_inception = None
+
+            one_year_change_pct = self._safe_float(
+                derived.get("growth_1y") or derived.get("nav_gr1y") or derived.get("yield_1y")
+            )
 
             # 申购状态
             purchase_status = data.get("fund_buy_info", {}).get("buy_status_desc", "")
@@ -342,6 +346,7 @@ class AntFundDataSource(BaseDataSource):
                 acc_nav=acc_nav,
                 daily_change=daily_change,
                 daily_change_pct=daily_change_pct,
+                one_year_change_pct=one_year_change_pct,
                 since_inception=since_inception,
                 purchase_limit=purchase_limit,
                 purchase_status=purchase_status,
@@ -362,9 +367,10 @@ class AntFundDataSource(BaseDataSource):
     @staticmethod
     def _safe_float(value) -> Optional[float]:
         """安全地将值转为 float，失败返回 None。"""
-        if value is None or value == "" or value == "--":
+        if value is None or value == "" or value == "--" or value == "---":
             return None
         try:
-            return float(str(value).strip())
+            val_str = str(value).replace("%", "").strip()
+            return float(val_str)
         except (ValueError, TypeError):
             return None

@@ -34,6 +34,7 @@ COLUMN_HEADERS = [
     ("acc_nav", "累计净值"),
     ("daily_change", "日增长值"),
     ("daily_change_pct", "日增长率(%)"),
+    ("one_year_change_pct", "近1年涨跌幅(%)"),
     ("data_source", "数据来源"),
 ]
 
@@ -83,6 +84,7 @@ def export_to_excel(funds: List[Dict], filepath: str) -> bool:
 
         for row_idx, fund in enumerate(funds, start=2):
             daily_change_pct = fund.get("daily_change_pct")
+            is_custom = bool(fund.get("is_custom") == 1 or fund.get("index_type") == "自选")
 
             # 决定字体颜色
             if daily_change_pct is not None:
@@ -104,15 +106,21 @@ def export_to_excel(funds: List[Dict], filepath: str) -> bool:
                 if value is None:
                     value = "--"
 
+                if key == "name" and is_custom and value != "--":
+                    value = f"⭐ {value}"
+                elif key == "index_type" and is_custom and value != "自选" and value != "--":
+                    value = f"{value} [自选]"
+
                 # 数值列格式化
                 if key in ("nav", "acc_nav", "daily_change") and value != "--":
                     try:
                         value = round(float(value), 4)
                     except (ValueError, TypeError):
                         pass
-                elif key in ("daily_change_pct", "since_inception") and value != "--":
+                elif key in ("daily_change_pct", "since_inception", "one_year_change_pct") and value != "--":
                     try:
-                        value = round(float(value), 2)
+                        clean_val = str(value).replace("%", "").strip()
+                        value = round(float(clean_val), 2)
                     except (ValueError, TypeError):
                         pass
 
@@ -139,7 +147,7 @@ def export_to_excel(funds: List[Dict], filepath: str) -> bool:
             "code": 14,
             "name": 36,
             "purchase_limit": 40,
-            "index_type": 12,
+            "index_type": 16,
             "manage_fee": 16,
             "custody_fee": 16,
             "sales_fee": 18,
@@ -148,6 +156,7 @@ def export_to_excel(funds: List[Dict], filepath: str) -> bool:
             "acc_nav": 14,
             "daily_change": 14,
             "daily_change_pct": 16,
+            "one_year_change_pct": 18,
             "data_source": 14,
         }
 
@@ -204,10 +213,16 @@ def export_to_csv(funds: List[Dict], filepath: str) -> bool:
             # 写入数据行
             for fund in funds:
                 row = []
+                is_custom = bool(fund.get("is_custom") == 1 or fund.get("index_type") == "自选")
                 for key, _ in COLUMN_HEADERS:
                     value = fund.get(key, "")
                     if value is None:
                         value = "--"
+
+                    if key == "name" and is_custom and value != "--":
+                        value = f"⭐ {value}"
+                    elif key == "index_type" and is_custom and value != "自选" and value != "--":
+                        value = f"{value} [自选]"
 
                     # 数值列格式化
                     if key in ("nav", "acc_nav", "daily_change") and value != "--":
@@ -215,9 +230,10 @@ def export_to_csv(funds: List[Dict], filepath: str) -> bool:
                             value = f"{float(value):.4f}"
                         except (ValueError, TypeError):
                             pass
-                    elif key in ("daily_change_pct", "since_inception") and value != "--":
+                    elif key in ("daily_change_pct", "since_inception", "one_year_change_pct") and value != "--":
                         try:
-                            value = f"{float(value):.2f}"
+                            clean_val = str(value).replace("%", "").strip()
+                            value = f"{float(clean_val):.2f}"
                         except (ValueError, TypeError):
                             pass
 

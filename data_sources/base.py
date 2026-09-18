@@ -85,6 +85,7 @@ class BaseDataSource(ABC):
             "acc_nav": kwargs.get("acc_nav"),
             "daily_change": kwargs.get("daily_change"),
             "daily_change_pct": kwargs.get("daily_change_pct"),
+            "one_year_change_pct": kwargs.get("one_year_change_pct"),
             "since_inception": kwargs.get("since_inception"),
             "purchase_limit": kwargs.get("purchase_limit", ""),
             "purchase_status": kwargs.get("purchase_status", ""),

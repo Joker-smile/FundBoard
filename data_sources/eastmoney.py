@@ -246,8 +246,8 @@ class EastMoneyDataSource(BaseDataSource):
             logger.warning("跳过 %s(%s): 无法获取净值", name, code)
             return None
 
-        # ---- 成立来收益率（允许失败） ----
-        since_inception = self._fetch_since_inception(code)
+        # ---- 近1年涨跌幅与成立来收益率（允许失败） ----
+        one_year_pct, since_inception = self._fetch_performance(code)
 
         # ---- 申购限额与运作费用（允许失败） ----
         detail_info = self._fetch_page_details(code)
@@ -261,6 +261,7 @@ class EastMoneyDataSource(BaseDataSource):
             acc_nav=nav_info.get("acc_nav"),
             daily_change=nav_info.get("daily_change"),
             daily_change_pct=nav_info.get("daily_change_pct"),
+            one_year_change_pct=one_year_pct,
             since_inception=since_inception,
             purchase_limit=detail_info.get("purchase_limit", ""),
             purchase_status=nav_info.get("purchase_status", ""),
@@ -324,8 +325,57 @@ class EastMoneyDataSource(BaseDataSource):
             return None
 
     # ===========================================================
-    # Step 4 - 获取成立来收益
+    # Step 4 - 获取收益率（近1年涨跌幅 + 成立来收益）
     # ===========================================================
+
+    def _fetch_performance(self, code: str) -> tuple:
+        """获取近1年涨跌幅及成立来收益率。
+
+        优先通过天天基金阶段涨幅 API 获取，不仅速度极快(约0.1s)，而且数据完整；
+        若近1年涨跌幅未能获取，回退至 pingzhongdata/{code}.js 的 syl_1n；
+        若成立来收益未能获取，回退至 LJSYLK API。
+
+        Returns:
+            (one_year_change_pct: Optional[float], since_inception: Optional[str])
+        """
+        one_year_pct = None
+        since_inception = None
+
+        # 1. 尝试阶段涨幅 API (FundArchivesDatas.aspx?type=jdzf)
+        try:
+            url = EASTMONEY_CONFIG["fund_stage_url"].format(code=code)
+            resp = requester.get(url, referer=f"http://fundf10.eastmoney.com/jdzf_{code}.html")
+            text = resp.text
+            m_1y = re.search(r"class='title'>近1年</li><li class='[^']*'>([^<]*)</li>", text)
+            if m_1y:
+                val_1y = m_1y.group(1).strip()
+                if val_1y and val_1y not in ("---", "--"):
+                    one_year_pct = self._safe_float(val_1y)
+
+            m_ln = re.search(r"class='title'>成立来</li><li class='[^']*'>([^<]*)</li>", text)
+            if m_ln:
+                val_ln = m_ln.group(1).strip()
+                if val_ln and val_ln not in ("---", "--"):
+                    since_inception = val_ln if "%" in val_ln else f"{val_ln}%"
+        except Exception as exc:
+            logger.debug("获取阶段涨幅失败 [%s]: %s", code, exc)
+
+        # 2. 如果近1年涨跌幅为空，回退到 pingzhongdata
+        if one_year_pct is None:
+            try:
+                pz_url = EASTMONEY_CONFIG["fund_pingzhong_url"].format(code=code)
+                resp = requester.get(pz_url, referer=EASTMONEY_CONFIG["referer"])
+                m_pz = re.search(r'var\s+syl_1n\s*=\s*"([^"]*)"', resp.text)
+                if m_pz and m_pz.group(1).strip():
+                    one_year_pct = self._safe_float(m_pz.group(1))
+            except Exception as exc:
+                logger.debug("获取品种数据近1年涨幅失败 [%s]: %s", code, exc)
+
+        # 3. 如果成立来收益仍为空，回退到原有 LJSYLK
+        if since_inception is None:
+            since_inception = self._fetch_since_inception(code)
+
+        return one_year_pct, since_inception
 
     def _fetch_since_inception(self, code: str) -> Optional[str]:
         """通过 LJSYLK API 获取成立来收益率。
@@ -459,9 +509,11 @@ class EastMoneyDataSource(BaseDataSource):
     @staticmethod
     def _safe_float(value) -> Optional[float]:
         """安全地将值转为 float，失败返回 None。"""
-        if value is None or value == "" or value == "--":
+        if value is None or value == "" or value == "--" or value == "---":
             return None
         try:
+            if isinstance(value, str):
+                value = value.replace("%", "").strip()
             return float(value)
         except (ValueError, TypeError):
             return None

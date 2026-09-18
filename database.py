@@ -59,6 +59,7 @@ class FundDatabase:
                     acc_nav         REAL,
                     daily_change    REAL,
                     daily_change_pct REAL,
+                    one_year_change_pct REAL,
                     since_inception TEXT,
                     purchase_limit  TEXT DEFAULT '',
                     purchase_status TEXT DEFAULT '',
@@ -72,10 +73,15 @@ class FundDatabase:
             """)
 
             # 尝试添加新增字段，兼容已有数据库结构
-            for col in ("is_custom", "manage_fee", "custody_fee", "sales_fee"):
+            for col, col_type in (
+                ("is_custom", "INTEGER DEFAULT 0"),
+                ("manage_fee", "TEXT DEFAULT ''"),
+                ("custody_fee", "TEXT DEFAULT ''"),
+                ("sales_fee", "TEXT DEFAULT ''"),
+                ("one_year_change_pct", "REAL"),
+            ):
                 try:
-                    default_val = "0" if col == "is_custom" else "''"
-                    cursor.execute(f"ALTER TABLE funds ADD COLUMN {col} TEXT DEFAULT {default_val};")
+                    cursor.execute(f"ALTER TABLE funds ADD COLUMN {col} {col_type};")
                 except sqlite3.OperationalError:
                     # 字段已存在，忽略错误
                     pass
@@ -138,10 +144,10 @@ class FundDatabase:
                 cursor.execute("""
                     INSERT INTO funds
                         (code, name, index_type, nav, nav_date, acc_nav,
-                         daily_change, daily_change_pct, since_inception,
+                         daily_change, daily_change_pct, one_year_change_pct, since_inception,
                          purchase_limit, purchase_status, data_source, updated_at, is_custom,
                          manage_fee, custody_fee, sales_fee)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(code) DO UPDATE SET
                         name=excluded.name,
                         index_type=excluded.index_type,
@@ -150,6 +156,7 @@ class FundDatabase:
                         acc_nav=excluded.acc_nav,
                         daily_change=excluded.daily_change,
                         daily_change_pct=excluded.daily_change_pct,
+                        one_year_change_pct=excluded.one_year_change_pct,
                         since_inception=excluded.since_inception,
                         purchase_limit=excluded.purchase_limit,
                         purchase_status=excluded.purchase_status,
@@ -168,6 +175,7 @@ class FundDatabase:
                     fund.get("acc_nav"),
                     fund.get("daily_change"),
                     fund.get("daily_change_pct"),
+                    fund.get("one_year_change_pct"),
                     fund.get("since_inception"),
                     fund.get("purchase_limit", ""),
                     fund.get("purchase_status", ""),

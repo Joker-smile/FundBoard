@@ -95,6 +95,7 @@ class MorningstarDataSource(BaseDataSource):
                 nav = self._safe_float(fields[4])
                 acc_nav = self._safe_float(fields[5])
                 daily_pct = self._safe_float(fields[6])
+                one_year_pct = self._safe_float(fields[11]) if len(fields) > 11 else None
                 since_inception = fields[14].strip() if len(fields) > 14 else ""
                 purchase_status = fields[22].strip() if len(fields) > 22 else ""
                 nav_date = fields[3].strip()
@@ -119,6 +120,7 @@ class MorningstarDataSource(BaseDataSource):
                     acc_nav=acc_nav,
                     daily_change=daily_change,
                     daily_change_pct=daily_pct,
+                    one_year_change_pct=one_year_pct,
                     since_inception=since_str,
                     purchase_status=purchase_status,
                 )
@@ -295,6 +297,7 @@ class MorningstarDataSource(BaseDataSource):
             nav = self._safe_float(fields[4])
             acc_nav = self._safe_float(fields[5])
             daily_pct = self._safe_float(fields[6])
+            one_year_pct = self._safe_float(fields[11]) if len(fields) > 11 else None
             since_inception = fields[14].strip() if len(fields) > 14 else ""
             purchase_status = fields[22].strip() if len(fields) > 22 else ""
             nav_date = fields[3].strip()
@@ -321,6 +324,7 @@ class MorningstarDataSource(BaseDataSource):
                 acc_nav=acc_nav,
                 daily_change=daily_change,
                 daily_change_pct=daily_pct,
+                one_year_change_pct=one_year_pct,
                 since_inception=since_str,
                 purchase_status=purchase_status,
             )
@@ -335,9 +339,10 @@ class MorningstarDataSource(BaseDataSource):
     @staticmethod
     def _safe_float(value) -> Optional[float]:
         """安全地将值转为 float，失败返回 None。"""
-        if value is None or value == "" or value == "--":
+        if value is None or value == "" or value == "--" or value == "---":
             return None
         try:
-            return float(str(value).strip())
+            val_str = str(value).replace("%", "").strip()
+            return float(val_str)
         except (ValueError, TypeError):
             return None

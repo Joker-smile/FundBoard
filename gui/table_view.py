@@ -22,7 +22,7 @@ class FundTableView(ttk.Frame):
         ("code", "基金代码", 75, "center"),
         ("name", "基金名称", 170, "center"),
         ("purchase_limit", "交易状态", 200, "center"),
-        ("index_type", "跟踪指数", 75, "center"),
+        ("index_type", "跟踪指数", 110, "center"),
         ("manage_fee", "管理费率", 95, "center"),
         ("custody_fee", "托管费率", 95, "center"),
         ("sales_fee", "销售服务费率", 100, "center"),
@@ -31,6 +31,7 @@ class FundTableView(ttk.Frame):
         ("acc_nav", "累计净值", 80, "center"),
         ("daily_change", "日增长值", 80, "center"),
         ("daily_change_pct", "日增长率(%)", 95, "center"),
+        ("one_year_change_pct", "近1年涨跌幅(%)", 110, "center"),
     ]
 
     # 涨跌着色
@@ -227,12 +228,25 @@ class FundTableView(ttk.Frame):
         else:
             return (direction,)
 
-    def _format_value(self, key: str, value) -> str:
+    def _format_value(self, key: str, value, fund: Optional[Dict] = None) -> str:
         """格式化显示值"""
         if value is None or value == "":
             return "--"
 
-        if key in ("nav", "acc_nav"):
+        if key == "name":
+            # 如果是自选基金，增加 ⭐ 标识
+            if fund and (fund.get("is_custom") == 1 or fund.get("index_type") == "自选"):
+                return f"⭐ {value}"
+            return str(value)
+
+        elif key == "index_type":
+            # 如果是自选基金且跟踪指数不是"自选"本身，增加 [自选] 标识（如 "纳指 [自选]"）
+            if fund and (fund.get("is_custom") == 1 or fund.get("index_type") == "自选"):
+                if value and value != "自选":
+                    return f"{value} [自选]"
+            return str(value)
+
+        elif key in ("nav", "acc_nav"):
             try:
                 return f"{float(value):.4f}"
             except (ValueError, TypeError):
@@ -243,15 +257,10 @@ class FundTableView(ttk.Frame):
                 return f"{v:+.4f}" if v != 0 else "0.0000"
             except (ValueError, TypeError):
                 return str(value)
-        elif key == "daily_change_pct":
+        elif key in ("daily_change_pct", "since_inception", "one_year_change_pct"):
             try:
-                v = float(value)
-                return f"{v:+.2f}" if v != 0 else "0.00"
-            except (ValueError, TypeError):
-                return str(value)
-        elif key == "since_inception":
-            try:
-                v = float(value)
+                val_clean = str(value).replace("%", "").strip()
+                v = float(val_clean)
                 return f"{v:+.2f}" if v != 0 else "0.00"
             except (ValueError, TypeError):
                 return str(value)
@@ -276,7 +285,7 @@ class FundTableView(ttk.Frame):
             values = []
             for col_id, _, _, _ in self.COLUMNS:
                 raw_val = fund.get(col_id, "")
-                values.append(self._format_value(col_id, raw_val))
+                values.append(self._format_value(col_id, raw_val, fund))
 
             tags = self._get_row_tags(fund, row_idx)
             self.tree.insert("", tk.END, values=values, tags=tags)
@@ -303,19 +312,26 @@ class FundTableView(ttk.Frame):
         for idx, (col_id, _, _, _) in enumerate(self.COLUMNS):
             if idx < len(values):
                 result[col_id] = values[idx]
+        if "name" in result and result["name"].startswith("⭐ "):
+            result["name"] = result["name"][2:]
+        if "index_type" in result and result["index_type"].endswith(" [自选]"):
+            result["index_type"] = result["index_type"][:-7]
         return result
 
     def sort_by_column(self, col: str, reverse: bool = False):
         """按指定列排序"""
         # 数值列需要数值排序
-        numeric_cols = {"nav", "acc_nav", "daily_change", "daily_change_pct", "since_inception"}
+        numeric_cols = {"nav", "acc_nav", "daily_change", "daily_change_pct", "since_inception", "one_year_change_pct"}
         fee_cols = {"manage_fee", "custody_fee", "sales_fee"}
 
         def sort_key(fund):
             val = fund.get(col, "")
             if col in numeric_cols:
                 try:
-                    return float(val) if val is not None else float("-inf")
+                    if val is None or val == "" or val == "--" or val == "---":
+                        return float("-inf")
+                    s = str(val).replace("%", "").strip()
+                    return float(s)
                 except (ValueError, TypeError):
                     return float("-inf")
             elif col in fee_cols:

@@ -42,6 +42,8 @@ EASTMONEY_CONFIG = {
     "fund_nav_url": "https://api.fund.eastmoney.com/f10/lsjz",
     "fund_detail_url": "http://fundf10.eastmoney.com/jbgk_{code}.html",
     "fund_perf_url": "https://api.fund.eastmoney.com/pinzhong/LJSYLK",
+    "fund_stage_url": "http://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jdzf&code={code}",
+    "fund_pingzhong_url": "https://fund.eastmoney.com/pingzhongdata/{code}.js",
     "referer": "https://fundf10.eastmoney.com/",
 }
 

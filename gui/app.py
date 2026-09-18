@@ -300,7 +300,13 @@ class FundApp:
         updated_dict = {f["code"]: f for f in updated_funds}
         for i, fund in enumerate(self.all_funds):
             if fund["code"] in updated_dict:
+                is_custom = fund.get("is_custom", 0)
+                orig_index_type = fund.get("index_type")
                 self.all_funds[i].update(updated_dict[fund["code"]])
+                if is_custom:
+                    self.all_funds[i]["is_custom"] = is_custom
+                if orig_index_type and orig_index_type != "自选" and self.all_funds[i].get("index_type") == "自选":
+                    self.all_funds[i]["index_type"] = orig_index_type
                 
         # 更新数据库
         try:
@@ -428,11 +434,15 @@ class FundApp:
             for f in filtered:
                 name = str(f.get("name", "")).lower()
                 code = str(f.get("code", "")).lower()
+                idx_type = str(f.get("index_type", "")).lower()
+                is_custom = bool(f.get("is_custom") == 1 or f.get("index_type") == "自选")
                 
-                # 判断是否所有搜索词都在名称或代码中
+                # 判断是否所有搜索词都在名称、代码、指数类型或自选标记中
                 match = True
                 for term in search_terms:
-                    if term not in name and term not in code:
+                    if term in ("自选", "⭐", "★") and is_custom:
+                        continue
+                    if term not in name and term not in code and term not in idx_type:
                         match = False
                         break
                 if match:
@@ -643,6 +653,7 @@ class FundApp:
                         "index_type": fund.get("index_type", ""),
                         "nav": None, "nav_date": "", "acc_nav": None,
                         "daily_change": None, "daily_change_pct": None,
+                        "one_year_change_pct": None,
                         "since_inception": None, "purchase_limit": "",
                         "purchase_status": "", "data_source": "",
                         "manage_fee": fund.get("manage_fee", "--"),
@@ -718,11 +729,13 @@ class FundApp:
                 self.all_funds.append({
                     "code": code,
                     "name": name,
+                    "index_type": fund.get("index_type", "自选"),
                     "is_custom": 1,
                     "purchase_limit": fund.get("purchase_limit", ""),
                     "manage_fee": fund.get("manage_fee", "--"),
                     "custody_fee": fund.get("custody_fee", "--"),
-                    "sales_fee": fund.get("sales_fee", "--")
+                    "sales_fee": fund.get("sales_fee", "--"),
+                    "one_year_change_pct": fund.get("one_year_change_pct")
                 })
                 
             # 保存到数据库
