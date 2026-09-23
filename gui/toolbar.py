@@ -16,6 +16,7 @@ from tkinter import ttk
 from typing import Callable, Optional
 
 from config import INDEX_KEYWORDS
+from gui.fonts import UI_FONT
 
 
 class ToolBar(ttk.Frame):
@@ -83,7 +84,7 @@ class ToolBar(ttk.Frame):
         ttk.Label(
             left_frame,
             text="数据源:",
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
         ).pack(side=tk.LEFT, padx=(0, 4))
 
         self.source_combo = ttk.Combobox(
@@ -92,7 +93,7 @@ class ToolBar(ttk.Frame):
             values=self.SOURCE_OPTIONS,
             state="readonly",
             width=10,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
         )
         self.source_combo.pack(side=tk.LEFT, padx=(0, 8))
 
@@ -130,7 +131,7 @@ class ToolBar(ttk.Frame):
         ttk.Label(
             left_frame,
             text="⏱ 自动刷新:",
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
         ).pack(side=tk.LEFT, padx=(0, 4))
 
         self.refresh_combo = ttk.Combobox(
@@ -139,7 +140,7 @@ class ToolBar(ttk.Frame):
             values=self.REFRESH_OPTIONS,
             state="readonly",
             width=8,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
         )
         self.refresh_combo.pack(side=tk.LEFT, padx=(0, 4))
 
@@ -158,7 +159,7 @@ class ToolBar(ttk.Frame):
         ttk.Label(
             self.filter_frame,
             text="筛选:",
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
         ).pack(side=tk.LEFT, padx=(0, 4))
 
         self._filter_buttons = {}
@@ -179,7 +180,7 @@ class ToolBar(ttk.Frame):
         ttk.Label(
             status_frame,
             text="状态:",
-            font=("Microsoft YaHei", 9)
+            font=(UI_FONT, 9)
         ).pack(side=tk.LEFT, padx=(0, 4))
         
         self.status_combo = ttk.Combobox(
@@ -188,7 +189,7 @@ class ToolBar(ttk.Frame):
             values=self.STATUS_OPTIONS,
             state="readonly",
             width=16,
-            font=("Microsoft YaHei", 9)
+            font=(UI_FONT, 9)
         )
         self.status_combo.pack(side=tk.LEFT, padx=(0, 4))
         self.status_combo.bind("<<ComboboxSelected>>", self._on_status_select)
@@ -208,14 +209,14 @@ class ToolBar(ttk.Frame):
         ttk.Label(
             search_frame,
             text="🔍 搜索:",
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
         ).pack(side=tk.LEFT, padx=(0, 4))
 
         self.search_entry = ttk.Entry(
             search_frame,
             textvariable=self._search_var,
             width=18,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
         )
         self.search_entry.pack(side=tk.LEFT, padx=(0, 4))
 

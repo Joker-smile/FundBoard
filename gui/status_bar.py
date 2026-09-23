@@ -8,6 +8,8 @@
 import tkinter as tk
 from tkinter import ttk
 
+from gui.fonts import UI_FONT
+
 from config import APP_SETTINGS
 
 
@@ -43,7 +45,7 @@ class StatusBar(ttk.Frame):
         self.status_label = ttk.Label(
             self,
             textvariable=self.status_var,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
             width=30,
             anchor="w",
         )
@@ -57,7 +59,7 @@ class StatusBar(ttk.Frame):
         ttk.Label(
             self,
             textvariable=self.source_var,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
             anchor="center",
         ).pack(side=tk.LEFT, padx=6)
 
@@ -68,7 +70,7 @@ class StatusBar(ttk.Frame):
         ttk.Label(
             self,
             textvariable=self.update_time_var,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
             anchor="center",
         ).pack(side=tk.LEFT, padx=6)
 
@@ -79,7 +81,7 @@ class StatusBar(ttk.Frame):
         ttk.Label(
             self,
             textvariable=self.fund_count_var,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
             anchor="center",
         ).pack(side=tk.LEFT, padx=6)
 
@@ -90,7 +92,7 @@ class StatusBar(ttk.Frame):
         self.avg_change_label = ttk.Label(
             self,
             textvariable=self.avg_change_var,
-            font=("Microsoft YaHei", 9),
+            font=(UI_FONT, 9),
             anchor="center",
         )
         self.avg_change_label.pack(side=tk.LEFT, padx=6)
@@ -111,7 +113,7 @@ class StatusBar(ttk.Frame):
             label = ttk.Label(
                 self.indices_frame,
                 text=f"{name}: -- (--%)",
-                font=("Microsoft YaHei", 9),
+                font=(UI_FONT, 9),
             )
             label.pack(side=tk.LEFT, padx=8)
             self.index_labels[symbol] = label
@@ -124,7 +126,7 @@ class StatusBar(ttk.Frame):
         ttk.Label(
             self,
             text=f"v{version}",
-            font=("Microsoft YaHei", 8),
+            font=(UI_FONT, 8),
             foreground="#888888",
             anchor="e",
         ).pack(side=tk.RIGHT, padx=(6, 0))
