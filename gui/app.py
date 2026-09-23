@@ -25,6 +25,7 @@ from database import FundDatabase
 from data_sources import AntFundDataSource, EastMoneyDataSource, MorningstarDataSource
 from export import export_to_csv, export_to_excel
 from gui.dialogs import AboutDialog, HistoryDialog, SettingsDialog
+from gui.fonts import UI_FONT
 from gui.status_bar import StatusBar
 from gui.table_view import FundTableView
 from gui.toolbar import ToolBar
@@ -50,7 +51,7 @@ class FundApp:
         )
 
         # 设置默认字体
-        self.root.option_add("*Font", "Microsoft\\ YaHei 10")
+        self.root.option_add("*Font", f"{{{UI_FONT}}} 10")
 
         # 初始化数据库
         self.db = FundDatabase()

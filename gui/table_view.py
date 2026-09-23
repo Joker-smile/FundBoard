@@ -13,6 +13,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Dict, List, Optional
 
+from gui.fonts import UI_FONT
+
 
 class FundTableView(ttk.Frame):
     """基金数据表格视图组件"""
@@ -78,8 +80,8 @@ class FundTableView(ttk.Frame):
         
         # 调整行高和字体
         style = ttk.Style()
-        style.configure("Treeview", rowheight=30, font=("Microsoft YaHei", 9))
-        style.configure("Treeview.Heading", font=("Microsoft YaHei", 10, "bold"), padding=4)
+        style.configure("Treeview", rowheight=30, font=(UI_FONT, 9))
+        style.configure("Treeview.Heading", font=(UI_FONT, 10, "bold"), padding=4)
 
         # 配置各列
         for col_id, col_title, col_width, col_anchor in self.COLUMNS:
