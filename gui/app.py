@@ -299,6 +299,7 @@ class FundApp:
             
         # 合并更新的数据到 self.all_funds 中
         updated_dict = {f["code"]: f for f in updated_funds}
+        merged_funds = []
         for i, fund in enumerate(self.all_funds):
             if fund["code"] in updated_dict:
                 is_custom = fund.get("is_custom", 0)
@@ -308,11 +309,12 @@ class FundApp:
                     self.all_funds[i]["is_custom"] = is_custom
                 if orig_index_type and orig_index_type != "自选" and self.all_funds[i].get("index_type") == "自选":
                     self.all_funds[i]["index_type"] = orig_index_type
+                merged_funds.append(self.all_funds[i])
                 
-        # 更新数据库
+        # 更新数据库：save_funds 为 UPSERT，仅写入本次更新的基金，
+        # 不再清空全表（避免写入中途失败导致其他基金数据丢失）
         try:
-            self.db.clear_funds()
-            self.db.save_funds(self.all_funds)
+            self.db.save_funds(merged_funds)
         except Exception as e:
             print(f"保存数据库失败: {e}")
             
@@ -892,7 +894,7 @@ class FundApp:
         name = fund.get("name", "")
 
         try:
-            history = self.db.get_history(code, limit=30)
+            history = self.db.get_history(code, limit=APP_SETTINGS.get("history_limit", 30))
         except Exception as e:
             messagebox.showerror(
                 "查询失败",

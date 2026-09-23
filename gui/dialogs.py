@@ -317,25 +317,31 @@ class SettingsDialog(tk.Toplevel):
         settings_frame = ttk.LabelFrame(base_tab, text="网络设置", padding=10)
         settings_frame.pack(fill=tk.X, pady=(0, 10))
 
-        # 请求延迟
+        # 请求延迟（随机区间：每次请求在最小/最大之间随机取值，用于反封锁限速）
         row1 = ttk.Frame(settings_frame)
         row1.pack(fill=tk.X, pady=4)
-        ttk.Label(row1, text="请求延迟 (秒):", font=(UI_FONT, 9), width=16, anchor="w").pack(side=tk.LEFT)
-        self.delay_var = tk.StringVar(value=str(self._settings.get("request_delay", APP_SETTINGS.get("request_delay", 1.0))))
-        ttk.Entry(row1, textvariable=self.delay_var, width=10, font=(UI_FONT, 9)).pack(side=tk.LEFT, padx=4)
+        ttk.Label(row1, text="最小请求延迟 (秒):", font=(UI_FONT, 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.delay_min_var = tk.StringVar(value=str(self._settings.get("request_delay_min", APP_SETTINGS.get("request_delay_min", 0.3))))
+        ttk.Entry(row1, textvariable=self.delay_min_var, width=10, font=(UI_FONT, 9)).pack(side=tk.LEFT, padx=4)
+
+        row1b = ttk.Frame(settings_frame)
+        row1b.pack(fill=tk.X, pady=4)
+        ttk.Label(row1b, text="最大请求延迟 (秒):", font=(UI_FONT, 9), width=16, anchor="w").pack(side=tk.LEFT)
+        self.delay_max_var = tk.StringVar(value=str(self._settings.get("request_delay_max", APP_SETTINGS.get("request_delay_max", 1.5))))
+        ttk.Entry(row1b, textvariable=self.delay_max_var, width=10, font=(UI_FONT, 9)).pack(side=tk.LEFT, padx=4)
 
         # 重试次数
         row2 = ttk.Frame(settings_frame)
         row2.pack(fill=tk.X, pady=4)
         ttk.Label(row2, text="重试次数:", font=(UI_FONT, 9), width=16, anchor="w").pack(side=tk.LEFT)
-        self.retry_var = tk.StringVar(value=str(self._settings.get("retry_count", APP_SETTINGS.get("retry_count", 3))))
+        self.retry_var = tk.StringVar(value=str(self._settings.get("max_retries", APP_SETTINGS.get("max_retries", 3))))
         ttk.Entry(row2, textvariable=self.retry_var, width=10, font=(UI_FONT, 9)).pack(side=tk.LEFT, padx=4)
 
         # 超时时间
         row3 = ttk.Frame(settings_frame)
         row3.pack(fill=tk.X, pady=4)
         ttk.Label(row3, text="超时时间 (秒):", font=(UI_FONT, 9), width=16, anchor="w").pack(side=tk.LEFT)
-        self.timeout_var = tk.StringVar(value=str(self._settings.get("timeout", APP_SETTINGS.get("timeout", 30))))
+        self.timeout_var = tk.StringVar(value=str(self._settings.get("request_timeout", APP_SETTINGS.get("request_timeout", 15))))
         ttk.Entry(row3, textvariable=self.timeout_var, width=10, font=(UI_FONT, 9)).pack(side=tk.LEFT, padx=4)
 
         # 数据设置 LabelFrame
@@ -462,11 +468,17 @@ class SettingsDialog(tk.Toplevel):
         """保存设置"""
         try:
             settings_dict = {
-                "request_delay": float(self.delay_var.get()),
-                "retry_count": int(self.retry_var.get()),
-                "timeout": int(self.timeout_var.get()),
+                "request_delay_min": float(self.delay_min_var.get()),
+                "request_delay_max": float(self.delay_max_var.get()),
+                "max_retries": int(self.retry_var.get()),
+                "request_timeout": int(self.timeout_var.get()),
                 "history_limit": int(self.history_limit_var.get()),
             }
+
+            if settings_dict["request_delay_min"] < 0 or settings_dict["request_delay_min"] > settings_dict["request_delay_max"]:
+                from tkinter import messagebox
+                messagebox.showwarning("输入错误", "请求延迟需满足：0 ≤ 最小延迟 ≤ 最大延迟！", parent=self)
+                return
 
             email_dict = {
                 "enabled": self.mail_enabled_var.get(),
@@ -520,6 +532,15 @@ class SettingsDialog(tk.Toplevel):
         return self._result
 
 class AddFundDialog(tk.Toplevel):
+    """添加自选基金弹窗"""
+
+    # 底部反馈提示的配色（暗色/亮色主题下均醒目）
+    STATUS_COLORS = {
+        "info": "#5bc0de",     # 蓝：常规提示
+        "success": "#00bc8c",  # 绿：添加成功
+        "warning": "#f0ad4e",  # 橙：重复/警示
+    }
+
     def __init__(self, parent, data_source):
         super().__init__(parent)
         self.title("添加自选基金")
@@ -531,7 +552,8 @@ class AddFundDialog(tk.Toplevel):
         self.grab_set()
 
         self.data_source = data_source
-        self.selected_funds = []
+        self.selected_funds = []      # 待提交的基金列表（弹窗保持打开时可累计）
+        self._added_codes = set()     # 已加入基金的代码，防止重复添加
         
         self._setup_ui()
         
@@ -574,24 +596,50 @@ class AddFundDialog(tk.Toplevel):
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.tree.bind("<Double-1>", lambda e: self._on_add())
+        self.tree.tag_configure("added", foreground="#00bc8c")  # 已加入行的绿色标识
+        self.tree.bind("<Double-1>", self._on_double_click)
         
         # 底部按钮
         btn_frame = ttk.Frame(self, padding=10)
         btn_frame.pack(fill=tk.X)
         
-        ttk.Button(btn_frame, text="关闭", command=self.destroy, bootstyle="secondary").pack(side=tk.RIGHT, padx=5)
-        ttk.Button(btn_frame, text="添加选中", command=self._on_add, bootstyle="success").pack(side=tk.RIGHT, padx=5)
+        # 「完成」关闭弹窗并提交；「添加选中」加入列表后弹窗保持打开，可继续搜索追加
+        self.finish_btn = ttk.Button(btn_frame, text="完成", command=self._on_finish, bootstyle="primary")
+        self.finish_btn.pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btn_frame, text="添加选中（不关闭）", command=self._on_add, bootstyle="success").pack(side=tk.RIGHT, padx=5)
         
-        self.status_var = tk.StringVar()
-        ttk.Label(btn_frame, textvariable=self.status_var, foreground="gray").pack(side=tk.LEFT, padx=5)
+        # 醒目的反馈提示（加粗 + 动态配色，替代原先不显眼的灰色小字）
+        self.status_var = tk.StringVar(value="ℹ 可多选后点击「添加选中」，弹窗保持打开，可继续搜索追加")
+        self.status_label = ttk.Label(
+            btn_frame,
+            textvariable=self.status_var,
+            foreground=self.STATUS_COLORS["info"],
+            font=(UI_FONT, 10, "bold"),
+        )
+        self.status_label.pack(side=tk.LEFT, padx=5)
+
+    def _set_status(self, text: str, kind: str = "info"):
+        """在底部显示醒目的反馈信息（kind: info/success/warning）"""
+        self.status_var.set(text)
+        try:
+            self.status_label.configure(
+                foreground=self.STATUS_COLORS.get(kind, self.STATUS_COLORS["info"])
+            )
+        except tk.TclError:
+            pass
+
+    def _mark_item(self, item):
+        """给结果列表中的一行加上「✓ 已加入」绿色标识"""
+        values = self.tree.item(item, "values")
+        if values and not str(values[1]).startswith("✓"):
+            self.tree.item(item, values=(values[0], f"✓ {values[1]}"), tags=("added",))
 
     def _on_search(self):
         kw = self.keyword_entry.get().strip()
         if not kw:
             return
-            
-        self.status_var.set("搜索中...")
+
+        self._set_status("🔍 搜索中...", "info")
         self.update_idletasks()
         
         # 清空
@@ -617,33 +665,74 @@ class AddFundDialog(tk.Toplevel):
 
     def _on_search_result(self, results):
         if not results:
-            self.status_var.set("未找到相关基金")
+            self._set_status("⚠ 未找到相关基金", "warning")
             from tkinter import messagebox
             messagebox.showinfo("提示", "未找到相关基金，请更换关键词重试。", parent=self)
             return
             
-        self.status_var.set(f"共找到 {len(results)} 只基金，可多选或双击添加")
+        self._set_status(f"共找到 {len(results)} 只基金，可多选或双击添加", "info")
         for fund in results:
-            self.tree.insert("", tk.END, values=(fund["code"], fund["name"]))
+            item = self.tree.insert("", tk.END, values=(fund["code"], fund["name"]))
+            # 之前已加入过的基金，重新显示「已加入」标识
+            if fund["code"] in self._added_codes:
+                self._mark_item(item)
             
     def _on_search_error(self, error):
-        self.status_var.set("搜索失败")
+        self._set_status("⚠ 搜索失败", "warning")
         from tkinter import messagebox
         messagebox.showerror("错误", f"搜索失败: {error}", parent=self)
 
+    def _on_double_click(self, event):
+        """双击结果行：将该基金加入待提交列表（弹窗保持打开）"""
+        item = self.tree.identify_row(event.y)
+        if not item:
+            return
+        if item not in self.tree.selection():
+            self.tree.selection_set(item)
+        self._on_add()
+
     def _on_add(self):
+        """将选中的基金加入待提交列表；弹窗保持打开，可继续搜索追加。"""
+        from tkinter import messagebox
+
         selection = self.tree.selection()
         if not selection:
-            from tkinter import messagebox
             messagebox.showwarning("提示", "请先在列表中选中要添加的基金！", parent=self)
             return
             
+        added_count = 0
         for item in selection:
             values = self.tree.item(item, "values")
-            if values:
-                self.selected_funds.append({"code": values[0], "name": values[1], "index_type": "自选"})
-                
-        self.destroy()
+            if not values:
+                continue
+            code = values[0]
+            if code in self._added_codes:
+                continue
+            self._added_codes.add(code)
+            self.selected_funds.append({"code": code, "name": values[1], "index_type": "自选"})
+            self._mark_item(item)   # 列表中打上「✓ 已加入」标识
+            added_count += 1
+
+        if added_count == 0:
+            self._set_status("⚠ 选中的基金均已加入，可继续搜索，或点击「完成」", "warning")
+        else:
+            self._set_status(
+                f"✓ 成功加入 {added_count} 只，待提交共 {len(self.selected_funds)} 只 —— 可继续搜索追加，完成后点「完成」",
+                "success",
+            )
+            self.finish_btn.configure(text=f"完成 ({len(self.selected_funds)})")
+
+        # 清除当前选中，方便继续下一次选择
+        self.tree.selection_remove(*self.tree.selection())
         
+    def _on_finish(self):
+        """完成添加：关闭弹窗并提交所有已加入的基金。"""
+        from tkinter import messagebox
+
+        if not self.selected_funds:
+            messagebox.showwarning("提示", "尚未添加任何基金，请先搜索并添加！", parent=self)
+            return
+        self.destroy()
+
     def get_result(self) -> List[Dict]:
         return self.selected_funds

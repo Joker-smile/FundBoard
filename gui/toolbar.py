@@ -58,9 +58,8 @@ class ToolBar(ttk.Frame):
         self.on_theme_toggle: Optional[Callable] = None
         self.on_source_change: Optional[Callable] = None
 
-        # 变量
+        # 变量（搜索输入监听统一在 _setup_bindings 中注册，避免重复触发两次全表刷新）
         self._search_var = tk.StringVar()
-        self._search_var.trace_add("write", self._on_search_change)
         
         self.source_var = tk.StringVar(value="天天基金")
         self.refresh_var = tk.StringVar(value=self.REFRESH_OPTIONS[0])
