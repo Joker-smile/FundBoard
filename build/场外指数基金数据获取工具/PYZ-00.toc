@@ -869,6 +869,7 @@
   ('gui', 'D:\\wwwroot\\基金获取\\gui\\__init__.py', 'PYMODULE'),
   ('gui.app', 'D:\\wwwroot\\基金获取\\gui\\app.py', 'PYMODULE'),
   ('gui.dialogs', 'D:\\wwwroot\\基金获取\\gui\\dialogs.py', 'PYMODULE'),
+  ('gui.fonts', 'D:\\wwwroot\\基金获取\\gui\\fonts.py', 'PYMODULE'),
   ('gui.status_bar', 'D:\\wwwroot\\基金获取\\gui\\status_bar.py', 'PYMODULE'),
   ('gui.table_view', 'D:\\wwwroot\\基金获取\\gui\\table_view.py', 'PYMODULE'),
   ('gui.toolbar', 'D:\\wwwroot\\基金获取\\gui\\toolbar.py', 'PYMODULE'),
