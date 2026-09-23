@@ -2,6 +2,12 @@
 
 一款为投资者量身定制的智能化、现代化、多数据源的场外指数基金监控与盯盘桌面应用程序。不仅能实时追踪主要海外指数及国内宽基场外基金，更支持大A指数实时行情、右键便捷自选管理，以及交易状态后台定时轮询与邮件报警提醒，助您完美把握申购与定投时机。
 
+### 📥 下载可执行文件
+
+[![下载 EXE](https://img.shields.io/badge/⬇️%20GitHub%20下载-场外指数基金数据获取工具.exe-brightgreen?style=for-the-badge&logo=github)](https://github.com/Joker-smile/FundBoard/raw/main/dist/场外指数基金数据获取工具.exe)
+
+> 点击上方按钮即可直接下载 [`dist/场外指数基金数据获取工具.exe`](https://github.com/Joker-smile/FundBoard/raw/main/dist/场外指数基金数据获取工具.exe)，无需配置 Python 环境，下载完成后双击即可运行。
+
 ![应用截图](img.png)
 
 ## 🎯 详细功能列表
