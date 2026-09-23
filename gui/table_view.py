@@ -10,6 +10,7 @@
 """
 
 import tkinter as tk
+import re
 from tkinter import ttk
 from typing import Callable, Dict, List, Optional
 
@@ -24,6 +25,7 @@ class FundTableView(ttk.Frame):
         ("code", "基金代码", 75, "center"),
         ("name", "基金名称", 170, "center"),
         ("purchase_limit", "交易状态", 200, "center"),
+        ("purchase_amount", "限购金额", 90, "center"),
         ("index_type", "跟踪指数", 110, "center"),
         ("manage_fee", "管理费率", 95, "center"),
         ("custody_fee", "托管费率", 95, "center"),
@@ -232,6 +234,9 @@ class FundTableView(ttk.Frame):
 
     def _format_value(self, key: str, value, fund: Optional[Dict] = None) -> str:
         """格式化显示值"""
+        if key == "purchase_amount":
+            return self._get_purchase_amount_label(fund or {})
+
         if value is None or value == "":
             return "--"
 
@@ -270,6 +275,48 @@ class FundTableView(ttk.Frame):
             return str(value)
 
         return str(value)
+
+    @staticmethod
+    def _get_purchase_amount_parts(fund: Dict) -> Optional[tuple]:
+        """从交易状态或限额字段提取单日申购金额和币种。"""
+        candidates = (
+            fund.get("purchase_limit", ""),
+            fund.get("purchase_status", ""),
+        )
+        for raw_value in candidates:
+            if raw_value is None:
+                continue
+            text = str(raw_value).strip().replace(",", "")
+            if not text or text in {"--", "---"}:
+                continue
+
+            # 数据源可能直接返回数值，也可能返回“上限1000元”或“上限1万元”。
+            match = re.search(r"(\d+(?:\.\d+)?)\s*(万元?|人民币|美元|美金|元)", text)
+            if match:
+                return float(match.group(1)), match.group(2)
+
+            if re.fullmatch(r"\d+(?:\.\d+)?", text):
+                return float(text), "元"
+
+        return None
+
+    @classmethod
+    def _get_purchase_amount(cls, fund: Dict) -> Optional[float]:
+        """提取金额数值，用于排序。万元会换算为元。"""
+        parts = cls._get_purchase_amount_parts(fund)
+        if parts is None:
+            return None
+        amount, unit = parts
+        return amount * 10000 if unit.startswith("万") else amount
+
+    @classmethod
+    def _get_purchase_amount_label(cls, fund: Dict) -> str:
+        """提取金额显示文本，并保留数据源返回的币种。"""
+        parts = cls._get_purchase_amount_parts(fund)
+        if parts is None:
+            return "--"
+        amount, unit = parts
+        return f"{amount:g}{unit}"
 
     # === 公共方法 ===
 
@@ -323,11 +370,14 @@ class FundTableView(ttk.Frame):
     def sort_by_column(self, col: str, reverse: bool = False):
         """按指定列排序"""
         # 数值列需要数值排序
-        numeric_cols = {"nav", "acc_nav", "daily_change", "daily_change_pct", "since_inception", "one_year_change_pct"}
+        numeric_cols = {"nav", "acc_nav", "daily_change", "daily_change_pct", "since_inception", "one_year_change_pct", "purchase_amount"}
         fee_cols = {"manage_fee", "custody_fee", "sales_fee"}
 
         def sort_key(fund):
             val = fund.get(col, "")
+            if col == "purchase_amount":
+                amount = self._get_purchase_amount(fund)
+                return amount if amount is not None else (float("-inf") if reverse else float("inf"))
             if col in numeric_cols:
                 try:
                     if val is None or val == "" or val == "--" or val == "---":
